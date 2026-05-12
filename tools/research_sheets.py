@@ -170,6 +170,34 @@ def get_payroll_summary() -> list:
 
 # ─── 쓰기 ────────────────────────────────────────────────────
 
+def renumber_all():
+    """A열 번호를 1부터 순서대로 재정렬"""
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    ws = _ensure_tab(sh, TAB_RESEARCH)
+    rows = ws.get_all_values()
+    updates = []
+    num = 1
+    for i, row in enumerate(rows[1:], 2):
+        if row and len(row) > 2 and row[2].strip():
+            updates.append({"range": f"A{i}", "values": [[str(num)]]})
+            num += 1
+    if updates:
+        ws.batch_update(updates)
+
+
+def fill_numbers_and_titles(rows_info: list):
+    """번호/제목 없는 행에 자동으로 채움. rows_info: [(row_num, number, title), ...]"""
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    ws = sh.worksheet(TAB_RESEARCH)
+    updates = []
+    for row_num, number, title in rows_info:
+        updates.append({"range": f"A{row_num}:B{row_num}", "values": [[number, title]]})
+    if updates:
+        ws.batch_update(updates)
+
+
 def append_row(number: str, title: str, url: str) -> int:
     gc = get_client()
     sh = gc.open_by_key(SHEET_ID)

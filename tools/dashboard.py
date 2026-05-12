@@ -37,7 +37,7 @@ from research_sheets import (
     read_all, claim, unclaim, submit_link, finish,
     allow_revision, get_staff_worked_urls,
     get_my_submissions, get_payroll_summary, write_log,
-    write_keywords, append_row,
+    write_keywords, append_row, renumber_all, fill_numbers_and_titles,
 )
 
 # ─── 상수 ────────────────────────────────────────────────────
@@ -228,9 +228,10 @@ if is_admin:
 
         # 일괄 추출
         st.subheader("📋 시트 대기중 일괄 추출")
-        st.caption("스프레드시트에 링크를 미리 입력해두고, 버튼 한 번으로 전체 키워드를 추출합니다.")
+        st.caption("링크만 C열에 넣으면 번호/제목 자동 생성 + 키워드 추출까지 한 번에 처리합니다.")
         try:
-            pending = [r for r in read_all() if r["status"] != "완료" and r["url"]]
+            all_rows = read_all()
+            pending = [r for r in all_rows if r["status"] != "완료" and r["url"]]
         except Exception:
             pending = []
 
@@ -238,17 +239,47 @@ if is_admin:
             st.info(f"대기 중인 항목: **{len(pending)}개** (예상 소요: 약 {len(pending) * 5 // 60 + 1}분)")
             if st.button(f"⚡ 대기중 {len(pending)}개 일괄 추출 시작", type="primary"):
                 from research_extractor import process_url as _pu
+                from research_sheets import renumber_all, fill_numbers_and_titles
+
+                # 1단계: 번호/제목 없는 행 먼저 채우기
+                fill_updates = []
+                existing_nums = [int(r["number"]) for r in all_rows if r["number"].isdigit()]
+                next_num = max(existing_nums, default=0) + 1
+                for row in pending:
+                    num = row["number"] if row["number"] else str(next_num)
+                    title = row["title"]
+                    if not row["number"] or not row["title"]:
+                        # 유튜브 제목 미리 가져오기
+                        if not title:
+                            try:
+                                from youtube_extractor import extract as _yt
+                                meta = _yt(row["url"])
+                                title = meta.get("title") or f"영상{num}"
+                            except Exception:
+                                title = f"영상{num}"
+                        fill_updates.append((row["row"], num, title))
+                        row["number"] = num
+                        row["title"] = title
+                        if not row["number"]:
+                            next_num += 1
+
+                if fill_updates:
+                    fill_numbers_and_titles(fill_updates)
+
+                # 2단계: 키워드 추출
                 ok_cnt = 0; err_cnt = 0
                 prog = st.progress(0, text="준비 중...")
                 log_area = st.empty()
                 logs = []
                 for i, row in enumerate(pending, 1):
-                    prog.progress(i / len(pending), text=f"[{i}/{len(pending)}] {row['title'] or row['url'][:30]}")
+                    prog.progress(i / len(pending), text=f"[{i}/{len(pending)}] {row['title'][:20]}")
                     out = _pu(row["url"], row["title"])
                     if out["ok"]:
+                        if not row["title"] or row["title"].startswith("영상"):
+                            row["title"] = out.get("title") or row["title"]
                         write_keywords(row["row"], out["keywords"], out["extra"])
                         write_log("관리자", "일괄추출", f"제품{row['number']}")
-                        logs.append(f"✅ {row['number']}번: {' / '.join(out['keywords'])}")
+                        logs.append(f"✅ {row['number']}번 {row['title'][:15]}: {' / '.join(out['keywords'][:2])}")
                         ok_cnt += 1
                     else:
                         logs.append(f"❌ {row['number']}번: {out.get('error')}")
@@ -256,10 +287,21 @@ if is_admin:
                     log_area.text("\n".join(logs[-10:]))
                     if i < len(pending):
                         time.sleep(4.5)
+
+                # 3단계: 번호 재정렬
+                renumber_all()
                 prog.progress(1.0, text="완료!")
-                st.success(f"완료 {ok_cnt}개 / 실패 {err_cnt}개")
+                st.success(f"완료 {ok_cnt}개 / 실패 {err_cnt}개 — 번호 자동 재정렬 완료")
         else:
             st.success("✅ 대기 중인 항목이 없습니다.")
+
+        # 번호 재정렬 단독 버튼
+        with st.expander("🔢 번호 재정렬만 하기"):
+            st.caption("제품이 중간에 삭제된 경우 번호를 1부터 다시 정렬합니다.")
+            if st.button("번호 재정렬 실행"):
+                from research_sheets import renumber_all
+                renumber_all()
+                st.success("재정렬 완료!")
 
     # ── 제품 현황 ────────────────────────────────────────────
     with tab_status:

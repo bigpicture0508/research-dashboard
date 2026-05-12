@@ -1,0 +1,258 @@
+#!/usr/bin/env python3
+"""
+리서치 대시보드 전용 Google Sheets 헬퍼
+"""
+import sys
+import json
+from pathlib import Path
+from datetime import datetime
+
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials
+except ImportError:
+    print("설치 필요: pip install gspread google-auth")
+    sys.exit(1)
+
+SHEET_ID   = "1lVy8DX0NFdL3YsjNEy9LMR8XpY5FHR3oZ1Fjts_AUwo"
+CREDS_PATH = Path(__file__).parent.parent / "credentials" / "service-account.json"
+SCOPES     = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
+
+TAB_RESEARCH        = "리서치"
+TAB_RESEARCH_RESULT = "리서치결과"
+TAB_ACCESS_LOG      = "접근로그"
+
+HEADERS = {
+    TAB_RESEARCH: [
+        "번호", "제목", "유튜브링크",
+        "키워드1", "키워드2", "키워드3", "키워드4", "키워드5",
+        "추가키워드", "처리상태", "배정자",
+        "제출갯수", "완료일시", "마무리일시", "수정허용",
+    ],
+    TAB_RESEARCH_RESULT: [
+        "제품번호", "제품명", "직원이름", "링크", "플랫폼", "제출일시",
+    ],
+    TAB_ACCESS_LOG: [
+        "일시", "직원이름", "행동", "상세",
+    ],
+}
+
+# 컬럼 인덱스 (0-based)
+# A=번호 B=제목 C=유튜브링크 D~H=키워드1~5 I=추가키워드
+# J=처리상태 K=배정자 L=제출갯수 M=완료일시 N=마무리일시 O=수정허용
+
+
+def get_client():
+    creds = Credentials.from_service_account_file(str(CREDS_PATH), scopes=SCOPES)
+    return gspread.authorize(creds)
+
+
+def _ensure_tab(sh, tab_name):
+    try:
+        return sh.worksheet(tab_name)
+    except gspread.WorksheetNotFound:
+        headers = HEADERS.get(tab_name, [])
+        ws = sh.add_worksheet(title=tab_name, rows=5000, cols=max(len(headers), 2))
+        if headers:
+            ws.append_row(headers)
+        return ws
+
+
+def _detect_platform(url: str) -> str:
+    u = url.lower()
+    if "tiktok.com" in u:                               return "TikTok"
+    if "xiaohongshu" in u or "xhslink" in u:           return "샤오홍슈"
+    if "douyin.com" in u:                               return "도우인"
+    return "기타"
+
+
+def _parse_row(i, row):
+    while len(row) < 15:
+        row.append("")
+    try:
+        extra = json.loads(row[8]) if row[8].strip() else {}
+    except Exception:
+        extra = {}
+    cnt = row[11].strip()
+    return {
+        "row":           i,
+        "number":        row[0].strip(),
+        "title":         row[1].strip(),
+        "url":           row[2].strip(),
+        "keywords":      [row[j].strip() for j in range(3, 8)],
+        "extra":         extra,
+        "status":        row[9].strip(),
+        "assignee":      row[10].strip(),
+        "submit_count":  int(cnt) if cnt.isdigit() else 0,
+        "done_at":       row[12].strip(),
+        "finished_at":   row[13].strip(),
+        "revision_open": row[14].strip() == "Y",
+    }
+
+
+# ─── 읽기 ────────────────────────────────────────────────────
+
+def read_all():
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    ws = _ensure_tab(sh, TAB_RESEARCH)
+    rows = ws.get_all_values()
+    return [_parse_row(i, list(r)) for i, r in enumerate(rows[1:], 2) if r and r[2].strip()]
+
+
+def get_staff_worked_urls(assignee: str) -> set:
+    """직원이 마무리 완료한 유튜브 URL 집합 (수정허용 제외)."""
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    try:
+        ws = sh.worksheet(TAB_RESEARCH)
+    except Exception:
+        return set()
+    rows = ws.get_all_values()
+    worked = set()
+    for row in rows[1:]:
+        p = _parse_row(0, list(row))
+        if p["assignee"] == assignee and p["finished_at"] and not p["revision_open"]:
+            if p["url"]:
+                worked.add(p["url"].strip())
+    return worked
+
+
+def get_my_submissions(product_number: str, assignee: str, hide_url: bool = True) -> list:
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    try:
+        ws = sh.worksheet(TAB_RESEARCH_RESULT)
+    except Exception:
+        return []
+    rows = ws.get_all_values()
+    items = [
+        {
+            "link":         r[3] if len(r) > 3 else "",
+            "platform":     r[4] if len(r) > 4 else "",
+            "submitted_at": r[5] if len(r) > 5 else "",
+        }
+        for r in rows[1:]
+        if len(r) >= 3 and r[0].strip() == str(product_number) and r[2].strip() == assignee
+    ]
+    if hide_url:
+        for item in items:
+            item["link"] = ""
+    return items
+
+
+def get_payroll_summary() -> list:
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    try:
+        ws = sh.worksheet(TAB_RESEARCH)
+    except Exception:
+        return []
+    rows = ws.get_all_values()
+    result = []
+    for i, row in enumerate(rows[1:], 2):
+        p = _parse_row(i, list(row))
+        if p["assignee"]:
+            result.append({
+                "number":       p["number"],
+                "title":        p["title"],
+                "assignee":     p["assignee"],
+                "submit_count": p["submit_count"],
+                "done":         p["submit_count"] >= 10,
+                "done_at":      p["done_at"],
+                "finished_at":  p["finished_at"],
+            })
+    return result
+
+
+# ─── 쓰기 ────────────────────────────────────────────────────
+
+def append_row(number: str, title: str, url: str) -> int:
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    ws = _ensure_tab(sh, TAB_RESEARCH)
+    ws.append_row([number, title, url] + [""] * 12)
+    return len(ws.get_all_values())
+
+
+def write_keywords(row_num: int, keywords: list, extra: dict = None):
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    ws = sh.worksheet(TAB_RESEARCH)
+    kws = (keywords + [""] * 5)[:5]
+    extra_str = json.dumps(extra or {}, ensure_ascii=False)
+    ws.update(range_name=f"D{row_num}:J{row_num}", values=[kws + [extra_str, "완료"]])
+
+
+def claim(row_num: int, name: str) -> bool:
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    ws = sh.worksheet(TAB_RESEARCH)
+    current = ws.cell(row_num, 11).value
+    if current and current.strip():
+        return False
+    ws.update_cell(row_num, 11, name)
+    verify = ws.cell(row_num, 11).value
+    return (verify or "").strip() == name.strip()
+
+
+def unclaim(row_num: int):
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    ws = sh.worksheet(TAB_RESEARCH)
+    ws.update_cell(row_num, 11, "")
+
+
+def submit_link(row_num: int, product_number: str, product_title: str,
+                assignee: str, link: str) -> dict:
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    ws_result = _ensure_tab(sh, TAB_RESEARCH_RESULT)
+    now_str  = datetime.now().strftime("%Y-%m-%d %H:%M")
+    platform = _detect_platform(link)
+    ws_result.append_row([product_number, product_title, assignee, link, platform, now_str])
+
+    all_rows = ws_result.get_all_values()
+    count = sum(
+        1 for r in all_rows[1:]
+        if len(r) >= 3 and r[0].strip() == str(product_number) and r[2].strip() == assignee
+    )
+
+    ws = sh.worksheet(TAB_RESEARCH)
+    ws.update_cell(row_num, 12, count)
+
+    done_at = ws.cell(row_num, 13).value or ""
+    if count >= 10 and not done_at:
+        done_at = now_str
+        ws.update_cell(row_num, 13, done_at)
+
+    return {"count": count, "done": count >= 10, "done_at": done_at}
+
+
+def finish(row_num: int) -> str:
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    ws = sh.worksheet(TAB_RESEARCH)
+    ws.update(range_name=f"N{row_num}:O{row_num}", values=[[now_str, ""]])
+    return now_str
+
+
+def allow_revision(row_num: int):
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    ws = sh.worksheet(TAB_RESEARCH)
+    ws.update(range_name=f"N{row_num}:O{row_num}", values=[["", "Y"]])
+
+
+def write_log(name: str, action: str, detail: str = ""):
+    try:
+        gc = get_client()
+        sh = gc.open_by_key(SHEET_ID)
+        ws = _ensure_tab(sh, TAB_ACCESS_LOG)
+        ws.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), name, action, detail])
+    except Exception:
+        pass

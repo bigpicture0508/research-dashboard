@@ -182,8 +182,8 @@ if not is_admin:
 # 관리자
 # ══════════════════════════════════════════════════════════════
 if is_admin:
-    tab_reg, tab_status, tab_payroll, tab_log = st.tabs(
-        ["📥 링크 등록", "📋 제품 현황", "💰 급여 집계", "🔒 접근 로그"])
+    tab_reg, tab_status, tab_payroll, tab_log, tab_preview = st.tabs(
+        ["📥 링크 등록", "📋 제품 현황", "💰 급여 집계", "🔒 접근 로그", "👀 직원 뷰"])
 
     # ── 링크 등록 ────────────────────────────────────────────
     with tab_reg:
@@ -355,6 +355,40 @@ if is_admin:
                 st.info("로그 없음")
         except Exception as e:
             st.warning(f"로그 탭 없음 (첫 사용 후 자동 생성): {e}")
+
+    # ── 직원 뷰 ──────────────────────────────────────────────
+    with tab_preview:
+        st.header("👀 직원 뷰 미리보기")
+        st.caption("관리자 전용 — 직원이 보는 화면과 동일합니다.")
+        if st.button("🔄 새로고침", key="pv_ref"): st.rerun()
+        try:
+            pv_data = read_all()
+        except Exception as e:
+            st.error(f"로드 실패: {e}"); pv_data = []
+
+        pv_items = [d for d in pv_data if d["status"] == "완료" and any(d["keywords"])]
+        if not pv_items:
+            st.info("키워드가 추출된 제품이 없습니다.")
+        for item in pv_items:
+            kws   = [k for k in item["keywords"] if k]
+            num   = item["number"] or "-"
+            title = item["title"] or "(제목없음)"
+            tag   = f"👤 {item['assignee']}" if item["assignee"] else "🟢 미배정"
+            fin   = "✅ 마무리됨" if item["finished_at"] and not item["revision_open"] else ""
+            with st.container(border=True):
+                st.markdown(f"**{num}번** — {title} &nbsp; {tag} &nbsp; {fin}")
+                cols = st.columns(len(kws))
+                for ci2, kw in enumerate(kws):
+                    with cols[ci2]:
+                        if st.button(f"{ci2+1}순위\n{kw}", key=f"pv_{item['row']}_{ci2}", use_container_width=True):
+                            st.session_state.open_js = open_js(kw)
+                            st.rerun()
+                extra = item.get("extra", {})
+                if extra:
+                    with st.expander("추가 키워드"):
+                        for cat, cat_kws in extra.items():
+                            if cat_kws:
+                                st.markdown(f"*{cat}*: {', '.join(cat_kws)}")
     st.stop()
 
 # ══════════════════════════════════════════════════════════════

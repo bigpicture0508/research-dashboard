@@ -12,17 +12,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
 except ImportError:
-    print("설치 필요: pip install google-generativeai")
+    print("설치 필요: pip install google-genai")
     sys.exit(1)
 
 from youtube_extractor import extract as yt_extract
 
-MODEL = "gemini-1.5-flash"
-DELAY_BETWEEN = 4.5   # 초 (분당 13회 → 15회 한도 여유)
+MODEL = "gemini-2.0-flash"
+DELAY_BETWEEN = 4.5
 MAX_RETRY = 5
-RETRY_WAIT = 60       # 429 발생 시 대기 초
+RETRY_WAIT = 60
 
 _PROMPT = """아래 유튜브 영상 대본을 분석해서 틱톡/샤오홍슈/도우인 경쟁 영상 검색에 쓸 키워드를 추출하세요.
 
@@ -73,22 +74,24 @@ def _parse(text: str):
 def _get_api_key():
     try:
         import streamlit as st
-        return st.secrets.get("GEMINI_API_KEY", "")
+        return str(st.secrets.get("GEMINI_API_KEY", ""))
     except Exception:
         return os.environ.get("GEMINI_API_KEY", "")
 
 
 def extract_keywords(transcript: str, title: str = "") -> tuple:
     api_key = _get_api_key()
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(MODEL)
+    client = genai.Client(api_key=api_key)
 
     for attempt in range(1, MAX_RETRY + 1):
         try:
-            response = model.generate_content(_PROMPT.format(
-                title=title or "(제목없음)",
-                transcript=transcript[:4000],
-            ))
+            response = client.models.generate_content(
+                model=MODEL,
+                contents=_PROMPT.format(
+                    title=title or "(제목없음)",
+                    transcript=transcript[:4000],
+                ),
+            )
             return _parse(response.text.strip())
         except Exception as e:
             msg = str(e).lower()
@@ -118,7 +121,6 @@ def process_url(url: str, title: str = "") -> dict:
     }
 
 
-# ─── 배치 실행 ────────────────────────────────────────────────
 if __name__ == "__main__":
     from research_sheets import read_all, write_keywords
 
@@ -126,33 +128,23 @@ if __name__ == "__main__":
     total   = len(pending)
 
     if total == 0:
-        print("✅ 처리할 항목이 없습니다 (모두 완료 상태)")
+        print("✅ 처리할 항목이 없습니다.")
         sys.exit(0)
 
     print(f"📋 대기 중인 항목: {total}개")
-    print("=" * 50)
-
-    ok_count  = 0
-    err_count = 0
+    ok_count = err_count = 0
 
     for i, row in enumerate(pending, 1):
-        num   = row["number"]
-        title = row["title"] or row["url"]
-        url   = row["url"]
-        print(f"[{i}/{total}] #{num} {title[:30]}")
-
-        result = process_url(url, title)
-
+        print(f"[{i}/{total}] #{row['number']} {(row['title'] or row['url'])[:30]}")
+        result = process_url(row["url"], row["title"])
         if result["ok"]:
             write_keywords(row["row"], result["keywords"], result["extra"])
-            print(f"  ✅ 키워드: {' / '.join(result['keywords'])}")
+            print(f"  ✅ {' / '.join(result['keywords'])}")
             ok_count += 1
         else:
-            print(f"  ❌ 실패: {result.get('error')}")
+            print(f"  ❌ {result.get('error')}")
             err_count += 1
-
         if i < total:
             time.sleep(DELAY_BETWEEN)
 
-    print("=" * 50)
-    print(f"완료 {ok_count}개 / 실패 {err_count}개 / 전체 {total}개")
+    print(f"완료 {ok_count}개 / 실패 {err_count}개")

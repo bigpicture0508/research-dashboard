@@ -144,10 +144,10 @@ if not st.session_state.authenticated:
         pw = st.text_input("관리자 비밀번호", type="password", key="a_pw")
         if st.button("관리자 로그인", type="primary", key="a_login"):
             try:
-                correct = st.secrets.get("admin_password", "")
+                correct = str(st.secrets["admin_password"]).strip()
             except Exception:
                 correct = ""
-            if pw == correct and correct:
+            if pw.strip() == correct and correct:
                 st.session_state.update(authenticated=True, is_admin=True,
                                         my_name="관리자", login_at=_now())
                 write_log("관리자", "로그인")

@@ -34,11 +34,18 @@ import research_sheets as rs
 rs.CREDS_PATH = _CREDS
 
 from research_sheets import (
-    read_all, claim, unclaim, submit_link, finish,
+    read_all as _read_all_raw, claim, unclaim, submit_link, finish,
     allow_revision, get_staff_worked_urls,
     get_my_submissions, get_payroll_summary, write_log,
     write_keywords, append_row, renumber_all, fill_numbers_and_titles,
 )
+
+@st.cache_data(ttl=30)
+def read_all():
+    return _read_all_raw()
+
+def clear_cache():
+    read_all.clear()
 
 # ─── 상수 ────────────────────────────────────────────────────
 SESSION_HOURS = 2
@@ -306,7 +313,7 @@ if is_admin:
     # ── 제품 현황 ────────────────────────────────────────────
     with tab_status:
         st.header("제품 현황")
-        if st.button("🔄 새로고침", key="s_ref"): st.rerun()
+        if st.button("🔄 새로고침", key="s_ref"): clear_cache(); st.rerun()
         try:
             all_data = read_all()
         except Exception as e:
@@ -331,21 +338,21 @@ if is_admin:
                         if st.button("✏️ 수정허용", key=f"rev_{item['row']}", use_container_width=True):
                             allow_revision(item["row"])
                             write_log("관리자", "수정허용", f"제품{item['number']} {item['assignee']}")
-                            st.rerun()
+                            clear_cache(); st.rerun()
                     else:
                         st.button("수정허용", key=f"rev_{item['row']}", disabled=True, use_container_width=True)
                 with c3:
                     if st.button("초기화", key=f"rst_{item['row']}", use_container_width=True):
                         unclaim(item["row"])
                         write_log("관리자", "배정초기화", f"제품{item['number']}")
-                        st.rerun()
+                        clear_cache(); st.rerun()
         else:
             st.info("등록된 제품이 없습니다.")
 
     # ── 급여 집계 ────────────────────────────────────────────
     with tab_payroll:
         st.header("💰 급여 집계")
-        if st.button("🔄 새로고침", key="p_ref"): st.rerun()
+        if st.button("🔄 새로고침", key="p_ref"): clear_cache(); st.rerun()
         try:
             payroll = get_payroll_summary()
         except Exception as e:
@@ -382,7 +389,7 @@ if is_admin:
     # ── 접근 로그 ────────────────────────────────────────────
     with tab_log:
         st.header("🔒 접근 로그")
-        if st.button("🔄 새로고침", key="l_ref"): st.rerun()
+        if st.button("🔄 새로고침", key="l_ref"): clear_cache(); st.rerun()
         try:
             import gspread
             gc = rs.get_client()
@@ -483,7 +490,7 @@ if is_admin:
                                     res = submit_link(t_my_item["row"], t_my_item["number"],
                                                       t_my_item["title"], tname, t_link.strip())
                                     st.success(f"저장 완료 — {res['count']}개")
-                                    st.rerun()
+                                    clear_cache(); st.rerun()
                         st.divider()
                         tf1, tf2 = st.columns(2)
                         with tf1:
@@ -491,11 +498,11 @@ if is_admin:
                                          disabled=sc < TARGET_LINKS, use_container_width=True):
                                 finish(t_my_item["row"])
                                 st.success("마무리 완료!")
-                                st.rerun()
+                                clear_cache(); st.rerun()
                         with tf2:
                             if st.button("↩️ 반납하기", key="t_unc", use_container_width=True):
                                 unclaim(t_my_item["row"])
-                                st.rerun()
+                                clear_cache(); st.rerun()
                 else:
                     t_available = [d for d in t_completed if not d["assignee"] and d["url"] not in t_worked]
                     if t_available:
@@ -508,10 +515,10 @@ if is_admin:
                                     if st.button("선택하기", key=f"t_cl_{item['row']}", type="primary", use_container_width=True):
                                         ok = claim(item["row"], tname)
                                         if ok:
-                                            st.rerun()
+                                            clear_cache(); st.rerun()
                                         else:
                                             st.warning("방금 다른 사람이 선택했습니다.")
-                                            st.rerun()
+                                            clear_cache(); st.rerun()
                     else:
                         st.info("선택 가능한 제품이 없습니다.")
     st.stop()
@@ -519,7 +526,7 @@ if is_admin:
 # ══════════════════════════════════════════════════════════════
 # 직원
 # ══════════════════════════════════════════════════════════════
-st_autorefresh(interval=3000, key="staff_refresh")
+st_autorefresh(interval=10000, key="staff_refresh")
 
 try:
     data = read_all()
@@ -613,7 +620,7 @@ if my_item:
                         st.success(f"🎉 {TARGET_LINKS}개 달성! 급여 대상 등록 완료.")
                     else:
                         st.success(f"저장 완료 — 현재 {res['count']}개")
-                    st.rerun()
+                    clear_cache(); st.rerun()
 
         with st.expander(f"제출 내역 ({sc}개)"):
             links = get_my_submissions(my_item["number"], name, hide_url=True)
@@ -631,14 +638,14 @@ if my_item:
                 finished_at = finish(my_item["row"])
                 write_log(name, "마무리", f"제품{num}/{sc}개")
                 st.success(f"✅ 마무리 완료! ({finished_at})")
-                st.rerun()
+                clear_cache(); st.rerun()
             if sc < TARGET_LINKS:
                 st.caption(f"{TARGET_LINKS - sc}개 더 제출하면 마무리 가능")
         with cr:
             if st.button("↩️ 반납하기", key="unc", use_container_width=True):
                 write_log(name, "반납", f"제품{num}")
                 unclaim(my_item["row"])
-                st.rerun()
+                clear_cache(); st.rerun()
 
     st.divider()
 
@@ -661,12 +668,12 @@ if not my_item:
                         ok = claim(item["row"], name)
                         if ok:
                             write_log(name, "제품선택", f"제품{num}")
-                            st.rerun()
+                            clear_cache(); st.rerun()
                         else:
                             st.warning("방금 다른 사람이 먼저 선택했습니다.")
-                            st.rerun()
+                            clear_cache(); st.rerun()
     else:
         st.info("현재 선택 가능한 제품이 없습니다. 잠시 후 다시 확인해주세요.")
 
 st.divider()
-st.caption(f"3초 자동 갱신 | 세션 {SESSION_HOURS}h 후 만료")
+st.caption(f"10초 자동 갱신 | 세션 {SESSION_HOURS}h 후 만료")

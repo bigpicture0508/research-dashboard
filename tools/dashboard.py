@@ -188,6 +188,8 @@ if is_admin:
     # ── 링크 등록 ────────────────────────────────────────────
     with tab_reg:
         st.header("유튜브 링크 등록")
+
+        # 개별 등록
         c1, c2 = st.columns([1, 3])
         with c1: inp_no    = st.text_input("제품 번호", placeholder="1")
         with c2: inp_title = st.text_input("제목", placeholder="경쟁사A — 수분크림")
@@ -202,7 +204,7 @@ if is_admin:
                         row_num = append_row(inp_no.strip(), inp_title.strip(), inp_url.strip())
                     except Exception as e:
                         st.error(f"시트 행 추가 실패: {e}"); st.stop()
-                with st.spinner("키워드 추출 중 (Claude Haiku)..."):
+                with st.spinner("키워드 추출 중..."):
                     try:
                         from research_extractor import process_url
                         out = process_url(inp_url.strip(), inp_title.strip())
@@ -221,6 +223,43 @@ if is_admin:
                             st.markdown(f"- {i}순위: **{k}**")
                         for cat, kws in out["extra"].items():
                             st.markdown(f"- **{cat}**: {', '.join(kws)}")
+
+        st.divider()
+
+        # 일괄 추출
+        st.subheader("📋 시트 대기중 일괄 추출")
+        st.caption("스프레드시트에 링크를 미리 입력해두고, 버튼 한 번으로 전체 키워드를 추출합니다.")
+        try:
+            pending = [r for r in read_all() if r["status"] != "완료" and r["url"]]
+        except Exception:
+            pending = []
+
+        if pending:
+            st.info(f"대기 중인 항목: **{len(pending)}개** (예상 소요: 약 {len(pending) * 5 // 60 + 1}분)")
+            if st.button(f"⚡ 대기중 {len(pending)}개 일괄 추출 시작", type="primary"):
+                from research_extractor import process_url as _pu
+                ok_cnt = 0; err_cnt = 0
+                prog = st.progress(0, text="준비 중...")
+                log_area = st.empty()
+                logs = []
+                for i, row in enumerate(pending, 1):
+                    prog.progress(i / len(pending), text=f"[{i}/{len(pending)}] {row['title'] or row['url'][:30]}")
+                    out = _pu(row["url"], row["title"])
+                    if out["ok"]:
+                        write_keywords(row["row"], out["keywords"], out["extra"])
+                        write_log("관리자", "일괄추출", f"제품{row['number']}")
+                        logs.append(f"✅ {row['number']}번: {' / '.join(out['keywords'])}")
+                        ok_cnt += 1
+                    else:
+                        logs.append(f"❌ {row['number']}번: {out.get('error')}")
+                        err_cnt += 1
+                    log_area.text("\n".join(logs[-10:]))
+                    if i < len(pending):
+                        time.sleep(4.5)
+                prog.progress(1.0, text="완료!")
+                st.success(f"완료 {ok_cnt}개 / 실패 {err_cnt}개")
+        else:
+            st.success("✅ 대기 중인 항목이 없습니다.")
 
     # ── 제품 현황 ────────────────────────────────────────────
     with tab_status:

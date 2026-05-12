@@ -358,37 +358,120 @@ if is_admin:
 
     # ── 직원 뷰 ──────────────────────────────────────────────
     with tab_preview:
-        st.header("👀 직원 뷰 미리보기")
-        st.caption("관리자 전용 — 직원이 보는 화면과 동일합니다.")
-        if st.button("🔄 새로고침", key="pv_ref"): st.rerun()
-        try:
-            pv_data = read_all()
-        except Exception as e:
-            st.error(f"로드 실패: {e}"); pv_data = []
+        st.header("👀 직원 테스트 모드")
+        st.caption("직원 이름을 선택하면 해당 직원 시점으로 완전히 테스트할 수 있습니다.")
 
-        pv_items = [d for d in pv_data if d["status"] == "완료" and any(d["keywords"])]
-        if not pv_items:
-            st.info("키워드가 추출된 제품이 없습니다.")
-        for item in pv_items:
-            kws   = [k for k in item["keywords"] if k]
-            num   = item["number"] or "-"
-            title = item["title"] or "(제목없음)"
-            tag   = f"👤 {item['assignee']}" if item["assignee"] else "🟢 미배정"
-            fin   = "✅ 마무리됨" if item["finished_at"] and not item["revision_open"] else ""
-            with st.container(border=True):
-                st.markdown(f"**{num}번** — {title} &nbsp; {tag} &nbsp; {fin}")
-                cols = st.columns(len(kws))
-                for ci2, kw in enumerate(kws):
-                    with cols[ci2]:
-                        if st.button(f"{ci2+1}순위\n{kw}", key=f"pv_{item['row']}_{ci2}", use_container_width=True):
-                            st.session_state.open_js = open_js(kw)
+        try:
+            all_pins = dict(st.secrets.get("staff_pins", {}))
+        except Exception:
+            all_pins = {}
+        staff_names = list(all_pins.keys())
+
+        if not staff_names:
+            st.warning("Secrets에 staff_pins가 없습니다.")
+        else:
+            test_name = st.selectbox("테스트할 직원 선택", staff_names, key="test_name")
+            if st.button("🎭 이 직원으로 테스트 시작", type="primary"):
+                st.session_state.test_mode = test_name
+                st.rerun()
+
+            if st.session_state.get("test_mode"):
+                tname = st.session_state.test_mode
+                st.info(f"**{tname}** 시점으로 테스트 중 — 실제 시트에 반영됩니다.")
+                if st.button("❌ 테스트 종료"):
+                    del st.session_state["test_mode"]
+                    st.rerun()
+
+                st.divider()
+
+                # 직원 뷰 전체 렌더링
+                try:
+                    t_data = read_all()
+                except Exception as e:
+                    st.error(f"로드 실패: {e}"); t_data = []
+
+                t_completed = [
+                    d for d in t_data
+                    if d["status"] == "완료" and any(d["keywords"])
+                    and (not d["finished_at"] or d["revision_open"])
+                ]
+                t_my_item = next((d for d in t_completed if d["assignee"] == tname), None)
+                try:
+                    t_worked = get_staff_worked_urls(tname)
+                except Exception:
+                    t_worked = set()
+
+                if t_my_item:
+                    kws   = [k for k in t_my_item["keywords"] if k]
+                    num   = t_my_item["number"] or "-"
+                    title = t_my_item["title"] or "(제목없음)"
+                    with st.container(border=True):
+                        st.markdown(f"**{num}번** — {title}")
+                        if st.button("🔍 영상 찾기 (1순위)", key="t_ms", type="primary"):
+                            st.session_state.open_js = open_js(kws[0])
                             st.rerun()
-                extra = item.get("extra", {})
-                if extra:
-                    with st.expander("추가 키워드"):
-                        for cat, cat_kws in extra.items():
-                            if cat_kws:
-                                st.markdown(f"*{cat}*: {', '.join(cat_kws)}")
+                        with st.expander("키워드 선택 검색"):
+                            for rank, kw in enumerate(kws, 1):
+                                if st.button(f"{rank}순위: {kw}", key=f"t_kw{rank}"):
+                                    st.session_state.open_js = open_js(kw)
+                                    st.rerun()
+                            extra = t_my_item.get("extra", {})
+                            if extra:
+                                st.markdown("---")
+                                for cat, cat_kws in extra.items():
+                                    if not cat_kws: continue
+                                    st.markdown(f"*{cat}*")
+                                    ecols = st.columns(min(len(cat_kws), 4))
+                                    for ei, kw in enumerate(cat_kws):
+                                        with ecols[ei % 4]:
+                                            if st.button(kw, key=f"t_ex_{cat}_{ei}", use_container_width=True):
+                                                st.session_state.open_js = open_js(kw)
+                                                st.rerun()
+                        st.divider()
+                        sc = t_my_item["submit_count"]
+                        st.markdown("**📎 링크 제출**")
+                        if sc >= TARGET_LINKS:
+                            st.success(f"✅ {sc}개 완료")
+                        else:
+                            st.progress(min(sc / TARGET_LINKS, 1.0), text=f"{sc} / {TARGET_LINKS}개")
+                        with st.form(key=f"t_sf_{t_my_item['row']}", clear_on_submit=True):
+                            t_link = st.text_input("링크 붙여넣기", placeholder="https://...")
+                            if st.form_submit_button("제출", type="primary", use_container_width=True):
+                                if t_link.strip():
+                                    res = submit_link(t_my_item["row"], t_my_item["number"],
+                                                      t_my_item["title"], tname, t_link.strip())
+                                    st.success(f"저장 완료 — {res['count']}개")
+                                    st.rerun()
+                        st.divider()
+                        tf1, tf2 = st.columns(2)
+                        with tf1:
+                            if st.button("🏁 마무리하기", key="t_fin", type="primary",
+                                         disabled=sc < TARGET_LINKS, use_container_width=True):
+                                finish(t_my_item["row"])
+                                st.success("마무리 완료!")
+                                st.rerun()
+                        with tf2:
+                            if st.button("↩️ 반납하기", key="t_unc", use_container_width=True):
+                                unclaim(t_my_item["row"])
+                                st.rerun()
+                else:
+                    t_available = [d for d in t_completed if not d["assignee"] and d["url"] not in t_worked]
+                    if t_available:
+                        st.subheader("📋 작업할 제품 선택")
+                        for item in t_available:
+                            with st.container(border=True):
+                                ca, cb = st.columns([5, 2])
+                                with ca: st.markdown(f"**{item['number']}번** — {item['title'] or '(제목없음)'}")
+                                with cb:
+                                    if st.button("선택하기", key=f"t_cl_{item['row']}", type="primary", use_container_width=True):
+                                        ok = claim(item["row"], tname)
+                                        if ok:
+                                            st.rerun()
+                                        else:
+                                            st.warning("방금 다른 사람이 선택했습니다.")
+                                            st.rerun()
+                    else:
+                        st.info("선택 가능한 제품이 없습니다.")
     st.stop()
 
 # ══════════════════════════════════════════════════════════════

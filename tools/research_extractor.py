@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
 유튜브 링크 → 키워드 추출 (Google Gemini Flash)
+배치 실행: python tools/research_extractor.py
 """
 import sys
 import json
 import os
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -18,6 +20,9 @@ except ImportError:
 from youtube_extractor import extract as yt_extract
 
 MODEL = "gemini-1.5-flash"
+DELAY_BETWEEN = 4.5   # 초 (분당 13회 → 15회 한도 여유)
+MAX_RETRY = 5
+RETRY_WAIT = 60       # 429 발생 시 대기 초
 
 _PROMPT = """아래 유튜브 영상 대본을 분석해서 틱톡/샤오홍슈/도우인 경쟁 영상 검색에 쓸 키워드를 추출하세요.
 
@@ -77,11 +82,24 @@ def extract_keywords(transcript: str, title: str = "") -> tuple:
     api_key = _get_api_key()
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(MODEL)
-    response = model.generate_content(_PROMPT.format(
-        title=title or "(제목없음)",
-        transcript=transcript[:4000],
-    ))
-    return _parse(response.text.strip())
+
+    for attempt in range(1, MAX_RETRY + 1):
+        try:
+            response = model.generate_content(_PROMPT.format(
+                title=title or "(제목없음)",
+                transcript=transcript[:4000],
+            ))
+            return _parse(response.text.strip())
+        except Exception as e:
+            msg = str(e).lower()
+            if "429" in msg or "quota" in msg or "rate" in msg:
+                wait = RETRY_WAIT * attempt
+                print(f"  ⚠️  호출 한도 초과 — {wait}초 대기 후 재시도 ({attempt}/{MAX_RETRY})")
+                time.sleep(wait)
+            else:
+                print(f"  ❌ Gemini 오류: {e}")
+                return [], {}
+    return [], {}
 
 
 def process_url(url: str, title: str = "") -> dict:
@@ -98,3 +116,43 @@ def process_url(url: str, title: str = "") -> dict:
         "keywords":       main,
         "extra":          extra,
     }
+
+
+# ─── 배치 실행 ────────────────────────────────────────────────
+if __name__ == "__main__":
+    from research_sheets import read_all, write_keywords
+
+    pending = [r for r in read_all() if r["status"] != "완료"]
+    total   = len(pending)
+
+    if total == 0:
+        print("✅ 처리할 항목이 없습니다 (모두 완료 상태)")
+        sys.exit(0)
+
+    print(f"📋 대기 중인 항목: {total}개")
+    print("=" * 50)
+
+    ok_count  = 0
+    err_count = 0
+
+    for i, row in enumerate(pending, 1):
+        num   = row["number"]
+        title = row["title"] or row["url"]
+        url   = row["url"]
+        print(f"[{i}/{total}] #{num} {title[:30]}")
+
+        result = process_url(url, title)
+
+        if result["ok"]:
+            write_keywords(row["row"], result["keywords"], result["extra"])
+            print(f"  ✅ 키워드: {' / '.join(result['keywords'])}")
+            ok_count += 1
+        else:
+            print(f"  ❌ 실패: {result.get('error')}")
+            err_count += 1
+
+        if i < total:
+            time.sleep(DELAY_BETWEEN)
+
+    print("=" * 50)
+    print(f"완료 {ok_count}개 / 실패 {err_count}개 / 전체 {total}개")

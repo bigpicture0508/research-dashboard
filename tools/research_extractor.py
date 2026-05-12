@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-유튜브 링크 → 키워드 추출 (Google Gemini Flash)
+유튜브 링크 → 키워드 추출 (Claude Haiku)
 배치 실행: python tools/research_extractor.py
 """
 import sys
@@ -12,18 +12,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 try:
-    from google import genai
-    from google.genai import types
+    import anthropic
 except ImportError:
-    print("설치 필요: pip install google-genai")
+    print("설치 필요: pip install anthropic")
     sys.exit(1)
 
 from youtube_extractor import extract as yt_extract
 
-MODEL = "gemini-2.0-flash"
-DELAY_BETWEEN = 4.5
-MAX_RETRY = 5
-RETRY_WAIT = 60
+MODEL = "claude-haiku-4-5-20251001"
+DELAY_BETWEEN = 1.0
+MAX_RETRY = 3
+RETRY_WAIT = 10
 
 _PROMPT = """아래 유튜브 영상 대본을 분석해서 틱톡/샤오홍슈/도우인 경쟁 영상 검색에 쓸 키워드를 추출하세요.
 
@@ -74,33 +73,34 @@ def _parse(text: str):
 def _get_api_key():
     try:
         import streamlit as st
-        return str(st.secrets.get("GEMINI_API_KEY", ""))
+        return str(st.secrets.get("ANTHROPIC_API_KEY", ""))
     except Exception:
-        return os.environ.get("GEMINI_API_KEY", "")
+        return os.environ.get("ANTHROPIC_API_KEY", "")
 
 
 def extract_keywords(transcript: str, title: str = "") -> tuple:
     api_key = _get_api_key()
-    client = genai.Client(api_key=api_key)
+    client = anthropic.Anthropic(api_key=api_key)
 
     for attempt in range(1, MAX_RETRY + 1):
         try:
-            response = client.models.generate_content(
+            msg = client.messages.create(
                 model=MODEL,
-                contents=_PROMPT.format(
+                max_tokens=600,
+                messages=[{"role": "user", "content": _PROMPT.format(
                     title=title or "(제목없음)",
                     transcript=transcript[:4000],
-                ),
+                )}],
             )
-            return _parse(response.text.strip())
+            return _parse(msg.content[0].text.strip())
         except Exception as e:
-            msg = str(e).lower()
-            if "429" in msg or "quota" in msg or "rate" in msg:
+            msg_str = str(e).lower()
+            if "429" in msg_str or "rate" in msg_str or "overloaded" in msg_str:
                 wait = RETRY_WAIT * attempt
-                print(f"  ⚠️  호출 한도 초과 — {wait}초 대기 후 재시도 ({attempt}/{MAX_RETRY})")
+                print(f"  ⚠️  한도 초과 — {wait}초 대기 후 재시도 ({attempt}/{MAX_RETRY})")
                 time.sleep(wait)
             else:
-                print(f"  ❌ Gemini 오류: {e}")
+                print(f"  ❌ API 오류: {e}")
                 return [], {}
     return [], {}
 

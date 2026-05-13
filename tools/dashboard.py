@@ -276,8 +276,8 @@ if not is_admin:
 # 관리자
 # ══════════════════════════════════════════════════════════════
 if is_admin:
-    tab_reg, tab_status, tab_payroll, tab_log, tab_preview = st.tabs(
-        ["📥 링크 등록", "📋 제품 현황", "💰 급여 집계", "🔒 접근 로그", "👀 직원 뷰"])
+    tab_reg, tab_status, tab_payroll, tab_log, tab_preview, tab_sync = st.tabs(
+        ["📥 링크 등록", "📋 제품 현황", "💰 급여 집계", "🔒 접근 로그", "👀 직원 뷰", "🚀 채널 입력 동기화"])
 
     # ── 링크 등록 ────────────────────────────────────────────
     with tab_reg:
@@ -556,6 +556,26 @@ if is_admin:
             st.warning(f"로그 탭 없음 (첫 사용 후 자동 생성): {e}")
 
     # ── 직원 뷰 ──────────────────────────────────────────────
+    with tab_sync:
+        st.header("🚀 채널 입력탭 동기화")
+        st.caption("배정탭에서 체크된 항목을 채널 입력탭에 적재합니다.")
+
+        from tools.research_sheets import sync_to_channel_input, CHANNEL_SHEET_IDS
+        channel_num = st.selectbox("채널 선택", list(CHANNEL_SHEET_IDS.keys()),
+                                   format_func=lambda x: f"채널{x}")
+        if st.button("▶ 동기화 실행", type="primary", use_container_width=True):
+            with st.spinner("동기화 중..."):
+                try:
+                    loaded = sync_to_channel_input(channel_num)
+                    if loaded:
+                        st.success(f"✅ {len(loaded)}개 적재 완료")
+                        for u in loaded:
+                            st.markdown(f"- `{u[:70]}`")
+                    else:
+                        st.info("체크된 항목 없음")
+                except Exception as e:
+                    st.error(f"❌ 오류: {e}")
+
     with tab_preview:
         st.header("👀 직원 테스트 모드")
         st.caption("직원 이름을 선택하면 해당 직원 시점으로 완전히 테스트할 수 있습니다.")

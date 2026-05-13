@@ -27,8 +27,13 @@ TAB_ACCESS_LOG      = "접근로그"
 TAB_DRAFTS          = "임시저장"
 TAB_VIDEO_SOURCE    = "영상소스"
 
-MATERIAL_LINK_START = 5   # F열 (0-base), 재료링크 시작 (D=직원확장포인트, E=확장포인트2)
+MATERIAL_LINK_START = 5   # F열 (0-base), 링크 시작 (D=직원확장포인트, E=확장포인트2)
 MATERIAL_LINK_COUNT = 50
+
+# 채널별 스프레드시트 ID
+CHANNEL_SHEET_IDS = {
+    1: "1AJEH26ENvns-UZ_XhtLXtIWIP29WZJIcMxsN5uvufC4",  # 채널1
+}
 
 HEADERS = {
     TAB_RESEARCH: [
@@ -404,6 +409,77 @@ def write_video_point(row_num: int, text: str):
 def allow_revision(row_num: int):
     ws = _get_ws()
     ws.update(range_name=f"N{row_num}:O{row_num}", values=[["", "Y"]])
+
+
+def sync_to_channel_input(channel_num: int = 1) -> list:
+    """배정탭에서 채널N_배정 체크된 행 → 해당 채널 입력탭 적재.
+    확장포인트 = 배정탭 우선, 없으면 영상소스 직원_확장포인트+확장포인트2 합치기.
+    반환: 적재된 유튜브링크 목록
+    """
+    import time as _t
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+
+    channel_sheet_id = CHANNEL_SHEET_IDS.get(channel_num)
+    if not channel_sheet_id:
+        print(f"⚠️  채널{channel_num} SHEET_ID 없음 (CHANNEL_SHEET_IDS에 추가 필요)")
+        return []
+
+    # 배정 탭 찾기
+    group_start = ((channel_num - 1) // 5) * 5 + 1
+    group_end   = min(group_start + 4, 50)
+    assign_tab  = f"배정_{group_start}~{group_end}"
+    ws_assign   = sh.worksheet(assign_tab)
+    rows        = ws_assign.get_all_values()
+    headers     = rows[0] if rows else []
+
+    req_ci = next((i for i, h in enumerate(headers) if h == f"채널{channel_num}_배정"), None)
+    ext_ci = next((i for i, h in enumerate(headers) if h == f"채널{channel_num}_확장포인트"), None)
+    if req_ci is None:
+        print(f"⚠️  {assign_tab}에 채널{channel_num}_배정 컬럼 없음")
+        return []
+
+    # 영상소스 탭 (유튜브링크 → 확장포인트 조회용)
+    ws_src   = sh.worksheet(TAB_VIDEO_SOURCE)
+    src_rows = ws_src.get_all_values()
+    src_map  = {r[1].strip(): r for r in src_rows[1:] if len(r) > 1 and r[1].strip()}
+
+    # 채널 입력탭
+    sh2      = gc.open_by_key(channel_sheet_id)
+    ws_input = sh2.worksheet("입력")
+
+    loaded = []
+    for ri, row in enumerate(rows[1:], start=2):
+        while len(row) <= max(req_ci, ext_ci or 0):
+            row.append("")
+        req_val = row[req_ci].strip().upper()
+        if req_val not in ("TRUE", "참"):
+            continue
+
+        yt_url = row[1].strip()  # B열 = 유튜브링크
+
+        # 확장포인트: 배정탭 우선 → 영상소스 D+E 합치기
+        ext = row[ext_ci].strip() if ext_ci is not None and ext_ci < len(row) else ""
+        if not ext:
+            src = src_map.get(yt_url, [])
+            d = src[3].strip() if len(src) > 3 else ""
+            e = src[4].strip() if len(src) > 4 else ""
+            ext = " / ".join(filter(None, [d, e]))
+
+        # 입력탭 적재: 링크 / 원본대본 / 확장포인트 / 채널이름 / 작업상태 / 제품번호
+        ws_input.append_row([yt_url, "", ext, f"channel-{channel_num}", "", ""])
+        _t.sleep(0.3)
+
+        # 배정탭 체크 해제
+        ws_assign.update_cell(ri, req_ci + 1, "FALSE")
+        _t.sleep(0.1)
+
+        loaded.append(yt_url)
+        print(f"✅ 채널{channel_num} 입력탭 적재: {yt_url[:60]}")
+
+    if not loaded:
+        print(f"ℹ️  채널{channel_num}_배정 체크 항목 없음")
+    return loaded
 
 
 def write_log(name: str, action: str, detail: str = ""):

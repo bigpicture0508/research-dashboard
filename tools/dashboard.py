@@ -675,302 +675,338 @@ try:
 except Exception:
     worked_urls = set()
 
-# ── 내 제품 ──────────────────────────────────────────────────
-if my_item:
-    if my_item["revision_open"]:
-        st.subheader("✏️ 수정 중인 제품")
-        st.info("관리자가 수정 기회를 부여했습니다.")
-    else:
-        st.subheader("✅ 내 작업 제품")
+# ── 탭 분리 ──────────────────────────────────────────────────
+tab_my, tab_select = st.tabs(["📌 내 작업", "📋 제품 선택"])
 
-    kws    = [k for k in my_item["keywords"] if k]
-    top_kw = kws[0]
-    num    = my_item["number"] or "-"
-    title  = my_item["title"]  or "(제목없음)"
+with tab_my:
+    if my_item:
+        if my_item["revision_open"]:
+            st.subheader("✏️ 수정 중인 제품")
+            st.info("관리자가 수정 기회를 부여했습니다.")
+        else:
+            st.subheader("✅ 내 작업 제품")
 
-    with st.container(border=True):
-        ci, cs = st.columns([4, 2])
-        with ci:
-            st.markdown(f"**{num}번** — {title}")
-            st.caption(f"1순위: {top_kw}")
-        with cs:
-            # 원본 유튜브 보기
-            yt_url = my_item.get("url", "")
-            if yt_url:
-                st.link_button("▶ 원본 유튜브 보기", yt_url, use_container_width=True)
+        kws    = [k for k in my_item["keywords"] if k]
+        top_kw = kws[0]
+        num    = my_item["number"] or "-"
+        title  = my_item["title"]  or "(제목없음)"
 
-        extra_json  = my_item.get("extra", {})
-        main_detail, extra_list = _get_triplets(extra_json, kws)
+        with st.container(border=True):
+            ci, cs = st.columns([4, 2])
+            with ci:
+                st.markdown(f"**{num}번** — {title}")
+                st.caption(f"1순위: {top_kw}")
+            with cs:
+                # 원본 유튜브 보기
+                yt_url = my_item.get("url", "")
+                if yt_url:
+                    st.link_button("▶ 원본 유튜브 보기", yt_url, use_container_width=True)
 
-        st.markdown("**🔍 검색 열기**")
+            extra_json  = my_item.get("extra", {})
+            main_detail, extra_list = _get_triplets(extra_json, kws)
 
-        # 1~3순위 빠른 버튼
-        for rank in range(1, 4):
-            if rank > len(main_detail): break
-            t = main_detail[rank - 1]
-            zh, en, ko = t.get("zh",""), t.get("en",""), t.get("ko","")
-            col_rank, col_zh, col_en, col_all = st.columns([2, 2, 2, 1])
-            with col_rank:
-                st.markdown(f"**{rank}순위**")
-                if ko: st.caption(ko)
-            with col_zh:
-                if zh and st.button(zh, key=f"kw_zh_{rank}", use_container_width=True):
-                    write_log(name, "검색오픈", f"제품{num}/{rank}/{zh}")
-                    st.session_state.open_js = open_js(zh)
-                    st.rerun()
-            with col_en:
-                if en and st.button(en, key=f"kw_en_{rank}", use_container_width=True):
-                    write_log(name, "검색오픈", f"제품{num}/{rank}/{en}")
-                    st.session_state.open_js = open_js(en)
-                    st.rerun()
-                elif not en:
-                    st.caption("(번역 필요)")
-            with col_all:
-                if st.button("↗", key=f"kw_all_{rank}", use_container_width=True):
-                    urls = list(make_urls(zh).values()) if zh else []
-                    if en and en != zh: urls += list(make_urls(en).values())
-                    write_log(name, "검색오픈", f"제품{num}/{rank}/전체")
-                    st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
-                    st.rerun()
+            st.markdown("**🔍 검색 열기**")
 
-        # 1~3순위 전체 열기
-        if st.button("🚀 1~3순위 전체 열기 (틱톡+샤오홍슈+도우인 동시)", key="ms_all", use_container_width=True):
-            all_urls = []
-            for t in main_detail[:3]:
-                for kw in [t.get("zh",""), t.get("en","")]:
-                    if kw: all_urls += list(make_urls(kw).values())
-            write_log(name, "전체검색오픈", f"제품{num}/1~3순위")
-            st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in all_urls) + "</script>"
-            st.rerun()
-
-        # 4~5순위 + 추가키워드
-        with st.expander("4~5순위 및 추가키워드"):
-            for rank in range(4, 6):
+            # 1~3순위 빠른 버튼
+            for rank in range(1, 4):
                 if rank > len(main_detail): break
                 t = main_detail[rank - 1]
                 zh, en, ko = t.get("zh",""), t.get("en",""), t.get("ko","")
-                c1, c2, c3 = st.columns([2, 2, 2])
-                with c1:
+                col_rank, col_zh, col_en, col_all = st.columns([2, 2, 2, 1])
+                with col_rank:
                     st.markdown(f"**{rank}순위**")
                     if ko: st.caption(ko)
-                with c2:
-                    if zh and st.button(zh, key=f"kw45_zh_{rank}", use_container_width=True):
-                        st.session_state.open_js = open_js(zh); st.rerun()
-                with c3:
-                    if en and st.button(en, key=f"kw45_en_{rank}", use_container_width=True):
-                        st.session_state.open_js = open_js(en); st.rerun()
-
-            if extra_list:
-                st.markdown("---")
-                st.markdown("**추가키워드** (제품 다른 표현)")
-                for ci2, t in enumerate(extra_list):
-                    zh, en = t.get("zh",""), t.get("en","")
-                    ec1, ec2, ec3 = st.columns([2, 2, 1])
-                    with ec1:
-                        if zh and st.button(zh, key=f"ex_zh_{ci2}", use_container_width=True):
-                            write_log(name, "검색오픈", f"추가/{zh}")
-                            st.session_state.open_js = open_js(zh); st.rerun()
-                    with ec2:
-                        if en and st.button(en, key=f"ex_en_{ci2}", use_container_width=True):
-                            write_log(name, "검색오픈", f"추가/{en}")
-                            st.session_state.open_js = open_js(en); st.rerun()
-                    with ec3:
-                        if st.button("↗", key=f"ex_all_{ci2}", use_container_width=True):
-                            urls = list(make_urls(zh).values()) if zh else []
-                            if en and en != zh: urls += list(make_urls(en).values())
-                            write_log(name, "검색오픈", f"추가/{zh}/전체")
-                            st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
-                            st.rerun()
-
-        # 직접 키워드 검색
-        with st.expander("✏️ 직접 키워드 검색"):
-            row_id = my_item["row"]
-            ck_key = f"custom_kw_{row_id}"
-            tr_key = f"custom_translated_{row_id}"
-            col_inp, col_btn = st.columns([4, 1])
-            with col_inp:
-                st.text_input("한국어/중국어/영어로 입력", placeholder="예: 뜯는 페인트, rental room renovation...",
-                              key=ck_key, label_visibility="collapsed")
-            with col_btn:
-                if st.button("🔍 번역+검색", key=f"custom_search_{row_id}", use_container_width=True):
-                    kw = st.session_state.get(ck_key, "").strip()
-                    if kw:
-                        import anthropic as _ant, os as _os
-                        try:
-                            _api = str(st.secrets.get("ANTHROPIC_API_KEY","")) or _os.environ.get("ANTHROPIC_API_KEY","")
-                            _cli = _ant.Anthropic(api_key=_api)
-                            _msg = _cli.messages.create(
-                                model="claude-haiku-4-5-20251001", max_tokens=150,
-                                messages=[{"role":"user","content":
-                                    f'"{kw}"를 틱톡/샤오홍슈/도우인 검색용으로 중국어(간체)와 영어로 번역.\n'
-                                    '영어는 반드시 띄어쓰기 포함 (예: "smoke exhaust fan" O, "SmokeExhaustFan" X)\n'
-                                    'JSON만 반환: {"zh":"중국어","en":"english with spaces"}'}])
-                            _raw = _msg.content[0].text.strip()
-                            if "```" in _raw: _raw = _raw.split("```")[1].lstrip("json").strip()
-                            _tr = json.loads(_raw)
-                            st.session_state[tr_key] = {"zh": _tr.get("zh",""), "en": _tr.get("en",""), "orig": kw}
-                        except Exception:
-                            st.session_state[tr_key] = {"zh": kw, "en": kw, "orig": kw}
-                        write_log(name, "직접검색번역", kw)
+                with col_zh:
+                    if zh and st.button(zh, key=f"kw_zh_{rank}", use_container_width=True):
+                        write_log(name, "검색오픈", f"제품{num}/{rank}/{zh}")
+                        st.session_state.open_js = open_js(zh)
                         st.rerun()
-
-            # 번역 결과 버튼
-            if tr_key in st.session_state:
-                tr = st.session_state[tr_key]
-                st.markdown(f"**'{tr['orig']}'** 번역 결과")
-                tb1, tb2, tb3 = st.columns(3)
-                with tb1:
-                    if tr["zh"] and st.button(tr["zh"], key=f"tr_zh_{row_id}", use_container_width=True):
-                        st.session_state.open_js = open_js(tr["zh"]); st.rerun()
-                with tb2:
-                    if tr["en"] and st.button(tr["en"], key=f"tr_en_{row_id}", use_container_width=True):
-                        st.session_state.open_js = open_js(tr["en"]); st.rerun()
-                with tb3:
-                    if st.button("↗ 둘 다 열기", key=f"tr_all_{row_id}", use_container_width=True):
-                        urls = list(make_urls(tr["zh"]).values()) + list(make_urls(tr["en"]).values())
+                with col_en:
+                    if en and st.button(en, key=f"kw_en_{rank}", use_container_width=True):
+                        write_log(name, "검색오픈", f"제품{num}/{rank}/{en}")
+                        st.session_state.open_js = open_js(en)
+                        st.rerun()
+                    elif not en:
+                        st.caption("(번역 필요)")
+                with col_all:
+                    if st.button("↗", key=f"kw_all_{rank}", use_container_width=True):
+                        urls = list(make_urls(zh).values()) if zh else []
+                        if en and en != zh: urls += list(make_urls(en).values())
+                        write_log(name, "검색오픈", f"제품{num}/{rank}/전체")
                         st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
                         st.rerun()
 
-        st.divider()
-
-        # 영상포인트 메모
-        st.markdown("**📝 영상포인트**")
-        vp_current = my_item.get("video_point", "")
-        vp_key = f"vp_{my_item['row']}"
-        if vp_key not in st.session_state:
-            st.session_state[vp_key] = vp_current
-        vp_text = st.text_area("영상 속 제품 특징 메모", value=st.session_state[vp_key],
-                               placeholder="예) 마스크팩 위에 덧바르는 수분 미스트, 냉장보관 강조, 30대 여성 타겟...",
-                               key=f"vp_area_{my_item['row']}", height=100,
-                               label_visibility="collapsed")
-        if st.button("💾 영상포인트 저장", key=f"vp_save_{my_item['row']}"):
-            write_video_point(my_item["row"], vp_text.strip())
-            st.session_state[vp_key] = vp_text.strip()
-            clear_cache()
-            write_log(name, "영상포인트저장", f"제품{my_item['number']}")
-            st.success("저장됐습니다.")
-
-        st.divider()
-
-        # 링크 제출
-        sc      = my_item["submit_count"]
-        done_at = my_item["done_at"]
-        st.markdown("**📎 링크 제출** (최대 15개 한번에)")
-        if sc >= TARGET_LINKS:
-            st.success(f"✅ {sc}개 완료 — {done_at}")
-        else:
-            st.progress(min(sc / TARGET_LINKS, 1.0), text=f"{sc} / {TARGET_LINKS}개")
-
-        # 링크 임시저장 (탭 닫고 다시 열어도 복원)
-        draft_key    = f"draft_links_{my_item['row']}"
-        draft_loaded = f"draft_loaded_{my_item['row']}"
-
-        # 최초 진입 시 시트에서 임시저장 복원
-        if not st.session_state.get(draft_loaded):
-            saved = load_draft(name, my_item["number"])
-            st.session_state[draft_key]    = saved
-            st.session_state[draft_loaded] = True
-
-        link_inputs = []
-        for li in range(15):
-            slot_key = f"slot_{my_item['row']}_{li}"
-            val = st.text_input(
-                "링크 입력 (1번)" if li == 0 else f"{li+1}",
-                value=st.session_state[draft_key][li],
-                placeholder="https://...",
-                key=slot_key,
-                label_visibility="visible" if li == 0 else "collapsed",
-            )
-            st.session_state[draft_key][li] = val
-            link_inputs.append(val)
-
-        has_input = any(l.strip() for l in link_inputs)
-        col_sub, col_save, col_clr = st.columns([3, 2, 1])
-        with col_sub:
-            if st.button("📤 한번에 제출", key=f"submit_btn_{my_item['row']}", type="primary",
-                         use_container_width=True, disabled=not has_input):
-                valid_links = [l.strip() for l in link_inputs if l.strip()]
-                with st.spinner(f"{len(valid_links)}개 저장 중..."):
-                    res = None
-                    for lnk in valid_links:
-                        res = submit_link(my_item["row"], my_item["number"],
-                                          my_item["title"], name, lnk)
-                        write_log(name, "링크제출", f"제품{num}/{lnk[:50]}")
-                # 제출 후 임시저장 삭제
-                clear_draft(name, my_item["number"])
-                st.session_state[draft_key]    = [""] * 15
-                st.session_state[draft_loaded] = False
-                if res and res["done"] and sc < TARGET_LINKS:
-                    st.balloons()
-                    st.success(f"🎉 {TARGET_LINKS}개 달성! 급여 대상 등록 완료.")
-                else:
-                    st.success(f"{len(valid_links)}개 저장 완료 — 현재 {res['count']}개")
-                clear_cache(); st.rerun()
-        with col_save:
-            if st.button("💾 임시저장", key=f"save_btn_{my_item['row']}", use_container_width=True,
-                         disabled=not has_input):
-                save_draft(name, my_item["number"], link_inputs)
-                st.toast("임시저장 완료 — 탭 닫아도 유지됩니다 ✅")
-        with col_clr:
-            if st.button("🗑", key=f"clear_btn_{my_item['row']}", use_container_width=True,
-                         help="입력 초기화"):
-                clear_draft(name, my_item["number"])
-                st.session_state[draft_key]    = [""] * 15
-                st.session_state[draft_loaded] = False
+            # 1~3순위 전체 열기
+            if st.button("🚀 1~3순위 전체 열기 (틱톡+샤오홍슈+도우인 동시)", key="ms_all", use_container_width=True):
+                all_urls = []
+                for t in main_detail[:3]:
+                    for kw in [t.get("zh",""), t.get("en","")]:
+                        if kw: all_urls += list(make_urls(kw).values())
+                write_log(name, "전체검색오픈", f"제품{num}/1~3순위")
+                st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in all_urls) + "</script>"
                 st.rerun()
 
-        with st.expander(f"제출 내역 ({sc}개)"):
-            links = get_my_submissions(my_item["number"], name, hide_url=True)
-            if links:
-                for idx, lnk in enumerate(links, 1):
-                    st.markdown(f"- **#{idx}** [{lnk['platform']}] {lnk['submitted_at']}")
-            else:
-                st.caption("아직 없음")
+            # 4~5순위 + 추가키워드
+            with st.expander("4~5순위 및 추가키워드"):
+                for rank in range(4, 6):
+                    if rank > len(main_detail): break
+                    t = main_detail[rank - 1]
+                    zh, en, ko = t.get("zh",""), t.get("en",""), t.get("ko","")
+                    c1, c2, c3 = st.columns([2, 2, 2])
+                    with c1:
+                        st.markdown(f"**{rank}순위**")
+                        if ko: st.caption(ko)
+                    with c2:
+                        if zh and st.button(zh, key=f"kw45_zh_{rank}", use_container_width=True):
+                            st.session_state.open_js = open_js(zh); st.rerun()
+                    with c3:
+                        if en and st.button(en, key=f"kw45_en_{rank}", use_container_width=True):
+                            st.session_state.open_js = open_js(en); st.rerun()
 
-        st.divider()
-        cf, cr = st.columns([3, 2])
-        with cf:
-            if st.button("🏁 작업 마무리하기", key="fin", type="primary",
-                         disabled=sc < TARGET_LINKS, use_container_width=True):
-                finished_at = finish(my_item["row"])
-                write_log(name, "마무리", f"제품{num}/{sc}개")
-                st.success(f"✅ 마무리 완료! ({finished_at})")
-                clear_cache(); st.rerun()
-            if sc < TARGET_LINKS:
-                st.caption(f"{TARGET_LINKS - sc}개 더 제출하면 마무리 가능")
-        with cr:
-            if st.button("↩️ 반납하기", key="unc", use_container_width=True):
-                write_log(name, "반납", f"제품{num}")
-                unclaim(my_item["row"])
-                clear_cache(); st.rerun()
+                if extra_list:
+                    st.markdown("---")
+                    st.markdown("**추가키워드** (제품 다른 표현)")
+                    for ci2, t in enumerate(extra_list):
+                        zh, en = t.get("zh",""), t.get("en","")
+                        ec1, ec2, ec3 = st.columns([2, 2, 1])
+                        with ec1:
+                            if zh and st.button(zh, key=f"ex_zh_{ci2}", use_container_width=True):
+                                write_log(name, "검색오픈", f"추가/{zh}")
+                                st.session_state.open_js = open_js(zh); st.rerun()
+                        with ec2:
+                            if en and st.button(en, key=f"ex_en_{ci2}", use_container_width=True):
+                                write_log(name, "검색오픈", f"추가/{en}")
+                                st.session_state.open_js = open_js(en); st.rerun()
+                        with ec3:
+                            if st.button("↗", key=f"ex_all_{ci2}", use_container_width=True):
+                                urls = list(make_urls(zh).values()) if zh else []
+                                if en and en != zh: urls += list(make_urls(en).values())
+                                write_log(name, "검색오픈", f"추가/{zh}/전체")
+                                st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
+                                st.rerun()
+
+            # 직접 키워드 검색
+            with st.expander("✏️ 직접 키워드 검색"):
+                row_id = my_item["row"]
+                ck_key = f"custom_kw_{row_id}"
+                tr_key = f"custom_translated_{row_id}"
+                col_inp, col_btn = st.columns([4, 1])
+                with col_inp:
+                    st.text_input("한국어/중국어/영어로 입력", placeholder="예: 뜯는 페인트, rental room renovation...",
+                                  key=ck_key, label_visibility="collapsed")
+                with col_btn:
+                    if st.button("🔍 번역+검색", key=f"custom_search_{row_id}", use_container_width=True):
+                        kw = st.session_state.get(ck_key, "").strip()
+                        if kw:
+                            import anthropic as _ant, os as _os
+                            try:
+                                _api = str(st.secrets.get("ANTHROPIC_API_KEY","")) or _os.environ.get("ANTHROPIC_API_KEY","")
+                                _cli = _ant.Anthropic(api_key=_api)
+                                _msg = _cli.messages.create(
+                                    model="claude-haiku-4-5-20251001", max_tokens=150,
+                                    messages=[{"role":"user","content":
+                                        f'"{kw}"를 틱톡/샤오홍슈/도우인 검색용으로 중국어(간체)와 영어로 번역.\n'
+                                        '영어는 반드시 띄어쓰기 포함 (예: "smoke exhaust fan" O, "SmokeExhaustFan" X)\n'
+                                        'JSON만 반환: {"zh":"중국어","en":"english with spaces"}'}])
+                                _raw = _msg.content[0].text.strip()
+                                if "```" in _raw: _raw = _raw.split("```")[1].lstrip("json").strip()
+                                _tr = json.loads(_raw)
+                                st.session_state[tr_key] = {"zh": _tr.get("zh",""), "en": _tr.get("en",""), "orig": kw}
+                            except Exception:
+                                st.session_state[tr_key] = {"zh": kw, "en": kw, "orig": kw}
+                            write_log(name, "직접검색번역", kw)
+                            st.rerun()
+
+                # 번역 결과 버튼
+                if tr_key in st.session_state:
+                    tr = st.session_state[tr_key]
+                    st.markdown(f"**'{tr['orig']}'** 번역 결과")
+                    tb1, tb2, tb3 = st.columns(3)
+                    with tb1:
+                        if tr["zh"] and st.button(tr["zh"], key=f"tr_zh_{row_id}", use_container_width=True):
+                            st.session_state.open_js = open_js(tr["zh"]); st.rerun()
+                    with tb2:
+                        if tr["en"] and st.button(tr["en"], key=f"tr_en_{row_id}", use_container_width=True):
+                            st.session_state.open_js = open_js(tr["en"]); st.rerun()
+                    with tb3:
+                        if st.button("↗ 둘 다 열기", key=f"tr_all_{row_id}", use_container_width=True):
+                            urls = list(make_urls(tr["zh"]).values()) + list(make_urls(tr["en"]).values())
+                            st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
+                            st.rerun()
+
+            st.divider()
+
+            # 영상포인트 메모
+            st.markdown("**📝 영상포인트**")
+            vp_current = my_item.get("video_point", "")
+            vp_key = f"vp_{my_item['row']}"
+            if vp_key not in st.session_state:
+                st.session_state[vp_key] = vp_current
+            vp_text = st.text_area("영상 속 제품 특징 메모", value=st.session_state[vp_key],
+                                   placeholder="예) 마스크팩 위에 덧바르는 수분 미스트, 냉장보관 강조, 30대 여성 타겟...",
+                                   key=f"vp_area_{my_item['row']}", height=100,
+                                   label_visibility="collapsed")
+            if st.button("💾 영상포인트 저장", key=f"vp_save_{my_item['row']}"):
+                write_video_point(my_item["row"], vp_text.strip())
+                st.session_state[vp_key] = vp_text.strip()
+                clear_cache()
+                write_log(name, "영상포인트저장", f"제품{my_item['number']}")
+                st.success("저장됐습니다.")
+
+            st.divider()
+
+            # 링크 제출
+            sc      = my_item["submit_count"]
+            done_at = my_item["done_at"]
+            st.markdown("**📎 링크 제출** (최대 15개 한번에)")
+            if sc >= TARGET_LINKS:
+                st.success(f"✅ {sc}개 완료 — {done_at}")
+            else:
+                st.progress(min(sc / TARGET_LINKS, 1.0), text=f"{sc} / {TARGET_LINKS}개")
+
+            # 링크 임시저장 (탭 닫고 다시 열어도 복원)
+            draft_key    = f"draft_links_{my_item['row']}"
+            draft_loaded = f"draft_loaded_{my_item['row']}"
+
+            # 최초 진입 시 시트에서 임시저장 복원
+            if not st.session_state.get(draft_loaded):
+                saved = load_draft(name, my_item["number"])
+                st.session_state[draft_key]    = saved
+                st.session_state[draft_loaded] = True
+
+            link_inputs = []
+            for li in range(15):
+                slot_key = f"slot_{my_item['row']}_{li}"
+                val = st.text_input(
+                    "링크 입력 (1번)" if li == 0 else f"{li+1}",
+                    value=st.session_state[draft_key][li],
+                    placeholder="https://...",
+                    key=slot_key,
+                    label_visibility="visible" if li == 0 else "collapsed",
+                )
+                st.session_state[draft_key][li] = val
+                link_inputs.append(val)
+
+            has_input = any(l.strip() for l in link_inputs)
+            col_sub, col_save, col_clr = st.columns([3, 2, 1])
+            with col_sub:
+                if st.button("📤 한번에 제출", key=f"submit_btn_{my_item['row']}", type="primary",
+                             use_container_width=True, disabled=not has_input):
+                    valid_links = [l.strip() for l in link_inputs if l.strip()]
+                    with st.spinner(f"{len(valid_links)}개 저장 중..."):
+                        res = None
+                        for lnk in valid_links:
+                            res = submit_link(my_item["row"], my_item["number"],
+                                              my_item["title"], name, lnk)
+                            write_log(name, "링크제출", f"제품{num}/{lnk[:50]}")
+                    # 제출 후 임시저장 삭제
+                    clear_draft(name, my_item["number"])
+                    st.session_state[draft_key]    = [""] * 15
+                    st.session_state[draft_loaded] = False
+                    if res and res["done"] and sc < TARGET_LINKS:
+                        st.balloons()
+                        st.success(f"🎉 {TARGET_LINKS}개 달성! 급여 대상 등록 완료.")
+                    else:
+                        st.success(f"{len(valid_links)}개 저장 완료 — 현재 {res['count']}개")
+                    clear_cache(); st.rerun()
+            with col_save:
+                if st.button("💾 임시저장", key=f"save_btn_{my_item['row']}", use_container_width=True,
+                             disabled=not has_input):
+                    save_draft(name, my_item["number"], link_inputs)
+                    st.toast("임시저장 완료 — 탭 닫아도 유지됩니다 ✅")
+            with col_clr:
+                if st.button("🗑", key=f"clear_btn_{my_item['row']}", use_container_width=True,
+                             help="입력 초기화"):
+                    clear_draft(name, my_item["number"])
+                    st.session_state[draft_key]    = [""] * 15
+                    st.session_state[draft_loaded] = False
+                    st.rerun()
+
+            with st.expander(f"제출 내역 ({sc}개)"):
+                links = get_my_submissions(my_item["number"], name, hide_url=True)
+                if links:
+                    for idx, lnk in enumerate(links, 1):
+                        st.markdown(f"- **#{idx}** [{lnk['platform']}] {lnk['submitted_at']}")
+                else:
+                    st.caption("아직 없음")
+
+            st.divider()
+            cf, cr = st.columns([3, 2])
+            with cf:
+                if st.button("🏁 작업 마무리하기", key="fin", type="primary",
+                             disabled=sc < TARGET_LINKS, use_container_width=True):
+                    finished_at = finish(my_item["row"])
+                    write_log(name, "마무리", f"제품{num}/{sc}개")
+                    st.success(f"✅ 마무리 완료! ({finished_at})")
+                    clear_cache(); st.rerun()
+                if sc < TARGET_LINKS:
+                    st.caption(f"{TARGET_LINKS - sc}개 더 제출하면 마무리 가능")
+            with cr:
+                if st.button("↩️ 반납하기", key="unc", use_container_width=True):
+                    write_log(name, "반납", f"제품{num}")
+                    unclaim(my_item["row"])
+                    clear_cache(); st.rerun()
 
     st.divider()
 
-# ── 선택 가능한 제품 ──────────────────────────────────────────
-available   = [d for d in completed if not d["assignee"]]
-selectable  = [d for d in available if d["url"] not in worked_urls]
+with tab_select:
+    st.subheader("📋 공유 제품 현황")
+    st.caption("선택 가능한 제품을 고르세요. 다른 직원의 선택 상태가 약 1분마다 갱신됩니다.")
+    if st.button("🔄 지금 새로고침", key="sel_ref"):
+        clear_cache(); st.rerun()
 
-if not my_item:
-    if selectable:
-        st.subheader("📋 작업할 제품 선택")
-        st.caption("하나를 선택하면 내 작업 화면으로 전환됩니다.")
-        for item in selectable:
-            num = item["number"] or "-"; title = item["title"] or "(제목없음)"
-            with st.container(border=True):
-                ci2, cb2 = st.columns([5, 2])
-                with ci2: st.markdown(f"**{num}번** — {title}")
-                with cb2:
-                    if st.button("선택하기", key=f"cl_{item['row']}",
-                                 type="primary", use_container_width=True):
-                        ok = claim(item["row"], name)
-                        if ok:
-                            write_log(name, "제품선택", f"제품{num}")
-                            clear_cache(); st.rerun()
-                        else:
-                            st.warning("방금 다른 사람이 먼저 선택했습니다.")
-                            clear_cache(); st.rerun()
+    if not completed:
+        st.info("현재 등록된 제품이 없습니다. 관리자에게 문의하세요.")
     else:
-        st.info("현재 선택 가능한 제품이 없습니다. 잠시 후 다시 확인해주세요.")
+        for item in completed:
+            n        = item["number"] or "-"
+            t        = item["title"]  or "(제목없음)"
+            assignee = item["assignee"]
+            is_mine  = assignee == name
+            already  = item["url"] in worked_urls
 
-st.divider()
-st.caption(f"10초 자동 갱신 | 세션 {SESSION_HOURS}h 후 만료")
+            with st.container(border=True):
+                c_info, c_stat, c_btn = st.columns([5, 2, 2])
+                with c_info:
+                    st.markdown(f"**{n}번** — {t}")
+                    kws_preview = [k for k in item["keywords"] if k]
+                    if kws_preview:
+                        st.caption(" · ".join(kws_preview[:3]))
+                with c_stat:
+                    if is_mine:
+                        sc_i = item["submit_count"]
+                        st.markdown(f"📌 **내 작업 중**")
+                        st.caption(f"{sc_i}/{TARGET_LINKS}개")
+                    elif already:
+                        st.markdown("✅ **내가 완료**")
+                    elif assignee:
+                        st.markdown("🔒 **작업 중**")
+                        st.caption(assignee[:3] + "***")
+                    else:
+                        st.markdown("🟢 **선택 가능**")
+                with c_btn:
+                    if is_mine:
+                        st.button("진행 중", key=f"busy_mine_{item['row']}", disabled=True,
+                                  use_container_width=True)
+                    elif already:
+                        st.button("완료됨", key=f"done_{item['row']}", disabled=True,
+                                  use_container_width=True)
+                    elif assignee:
+                        st.button("선택 불가", key=f"taken_{item['row']}", disabled=True,
+                                  use_container_width=True)
+                    elif my_item:
+                        st.button("현재 작업 먼저 완료", key=f"busy_{item['row']}", disabled=True,
+                                  use_container_width=True,
+                                  help="작업 중인 제품을 마무리하거나 반납해야 새 제품을 선택할 수 있습니다.")
+                    else:
+                        if st.button("✅ 선택하기", key=f"cl_{item['row']}", type="primary",
+                                     use_container_width=True):
+                            ok = claim(item["row"], name)
+                            if ok:
+                                write_log(name, "제품선택", f"제품{n}")
+                                clear_cache(); st.rerun()
+                            else:
+                                st.warning("방금 다른 사람이 먼저 선택했습니다.")
+                                clear_cache(); st.rerun()
+
+st.caption(f"약 1분 자동 갱신 | 세션 {SESSION_HOURS}h 후 만료")

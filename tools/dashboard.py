@@ -873,6 +873,18 @@ with tab_my:
 
             st.divider()
 
+            # 확장포인트 메모
+            st.markdown("**💡 확장포인트**")
+            ep_key = f"ep_{my_item['row']}"
+            if ep_key not in st.session_state:
+                st.session_state[ep_key] = ""
+            st.text_area("확장포인트 메모 (임시저장에 저장됨)", value=st.session_state[ep_key],
+                         placeholder="예) 제습기 + 곰팡이 제거, 세탁기 냄새 제거 등 확장 소재...",
+                         key=f"ep_area_{my_item['row']}", height=80,
+                         label_visibility="collapsed")
+
+            st.divider()
+
             # 영상포인트 메모
             st.markdown("**📝 영상포인트**")
             vp_current = my_item.get("video_point", "")
@@ -908,16 +920,15 @@ with tab_my:
             draft_loaded = f"draft_loaded_{my_item['row']}"
 
             # 최초 진입 시 시트에서 임시저장 복원
+            ep_key = f"ep_{my_item['row']}"
             vp_draft_key = f"vp_draft_{my_item['row']}"
             if not st.session_state.get(draft_loaded):
                 saved = load_draft(name, my_item["number"])
                 st.session_state[draft_key]     = saved["links"]
                 st.session_state[draft_loaded]  = True
-                # 영상포인트 임시저장 복원 (시트 저장값보다 임시저장 우선)
-                if saved["video_point"] and vp_key in st.session_state:
-                    st.session_state[vp_key] = saved["video_point"]
-                elif saved["video_point"]:
-                    st.session_state[vp_draft_key] = saved["video_point"]
+                # 확장포인트 임시저장 복원
+                if saved.get("expansion_point"):
+                    st.session_state[ep_key] = saved["expansion_point"]
 
             link_inputs = []
             for li in range(15):
@@ -957,8 +968,10 @@ with tab_my:
             with col_save:
                 if st.button("💾 임시저장", key=f"save_btn_{my_item['row']}", use_container_width=True,
                              disabled=not has_input):
+                    ep_val = st.session_state.get(f"ep_area_{my_item['row']}", "") or st.session_state.get(ep_key, "")
                     save_draft(name, my_item["number"], link_inputs,
-                               st.session_state.get(vp_key, ""))
+                               expansion_point=ep_val)
+                    st.session_state[ep_key] = ep_val
                     st.toast("임시저장 완료 — 탭 닫아도 유지됩니다 ✅")
             with col_clr:
                 if st.button("🗑", key=f"clear_btn_{my_item['row']}", use_container_width=True,

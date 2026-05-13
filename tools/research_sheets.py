@@ -25,6 +25,10 @@ TAB_RESEARCH        = "리서치"
 TAB_RESEARCH_RESULT = "리서치결과"
 TAB_ACCESS_LOG      = "접근로그"
 TAB_DRAFTS          = "임시저장"
+TAB_VIDEO_SOURCE    = "영상소스"
+
+MATERIAL_LINK_START = 3   # D열 (0-base), 재료링크 시작
+MATERIAL_LINK_COUNT = 50
 
 HEADERS = {
     TAB_RESEARCH: [
@@ -40,9 +44,12 @@ HEADERS = {
         "일시", "직원이름", "행동", "상세",
     ],
     TAB_DRAFTS: (
-        ["직원이름", "제품번호", "저장일시"] +
-        [f"링크{i}" for i in range(1, 16)] +
-        ["영상포인트"]
+        ["직원이름", "제품번호", "저장일시", "확장포인트"] +
+        [f"링크{i}" for i in range(1, 16)]
+    ),
+    TAB_VIDEO_SOURCE: (
+        ["썸네일", "유튜브링크", "제목"] +
+        [f"재료링크{i}" for i in range(1, MATERIAL_LINK_COUNT + 1)]
     ),
 }
 
@@ -243,6 +250,39 @@ def unclaim(row_num: int):
     ws.update_cell(row_num, 11, "")
 
 
+def _add_to_video_source(sh, youtube_url: str, title: str, material_url: str):
+    """영상소스 탭에서 유튜브링크 행 찾아 빈 재료링크 슬롯에 추가. 없으면 새 행 생성."""
+    import time as _t
+    ws = _ensure_tab(sh, TAB_VIDEO_SOURCE)
+    rows = ws.get_all_values()
+
+    # 유튜브링크 기준으로 행 탐색 (B열 = index 1)
+    target_row = None
+    for i, r in enumerate(rows[1:], start=2):
+        if len(r) > 1 and r[1].strip() == youtube_url.strip():
+            target_row = i
+            row_data = r
+            break
+
+    if target_row is None:
+        # 새 행 추가 (썸네일 수식 포함)
+        import re as _re
+        vid_m = _re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", youtube_url)
+        thumb = f'=IMAGE("https://img.youtube.com/vi/{vid_m.group(1)}/0.jpg")' if vid_m else ""
+        new_row = [thumb, youtube_url, title] + [material_url] + [""] * (MATERIAL_LINK_COUNT - 1)
+        ws.append_row(new_row, value_input_option="USER_ENTERED")
+        return
+
+    # 빈 슬롯 탐색 (D열=index 3 부터)
+    end = MATERIAL_LINK_START + MATERIAL_LINK_COUNT
+    for col_idx in range(MATERIAL_LINK_START, end):
+        val = row_data[col_idx].strip() if col_idx < len(row_data) else ""
+        if not val:
+            ws.update_cell(target_row, col_idx + 1, material_url)
+            _t.sleep(0.1)
+            return
+
+
 def submit_link(row_num: int, product_number: str, product_title: str,
                 assignee: str, link: str) -> dict:
     gc = get_client()
@@ -266,6 +306,14 @@ def submit_link(row_num: int, product_number: str, product_title: str,
         done_at = now_str
         ws.update_cell(row_num, 13, done_at)
 
+    # 영상소스 탭에 재료링크 자동 추가
+    try:
+        youtube_url = ws.cell(row_num, 3).value or ""  # C열 = 유튜브링크
+        if youtube_url:
+            _add_to_video_source(sh, youtube_url, product_title, link)
+    except Exception as _e:
+        pass  # 실패해도 제출 결과에 영향 없음
+
     return {"count": count, "done": count >= 10, "done_at": done_at}
 
 
@@ -276,8 +324,10 @@ def finish(row_num: int) -> str:
     return now_str
 
 
-def save_draft(assignee: str, product_number: str, links: list, video_point: str = ""):
-    """링크 + 영상포인트 임시저장. 기존 같은 직원+제품 행은 덮어씀."""
+def save_draft(assignee: str, product_number: str, links: list,
+               video_point: str = ""):
+    """링크 + 영상포인트 + 확장포인트 임시저장.
+    열 순서: A=직원이름 B=제품번호 C=저장일시 D=확장포인트 E~S=링크1~15"""
     gc = get_client()
     sh = gc.open_by_key(SHEET_ID)
     ws = _ensure_tab(sh, TAB_DRAFTS)
@@ -289,9 +339,11 @@ def save_draft(assignee: str, product_number: str, links: list, video_point: str
             break
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     padded = (links + [""] * 15)[:15]
-    row_data = [assignee, str(product_number), now_str] + padded + [video_point]
+    # D=확장포인트, E~S=링크1~15
+    row_data = [assignee, str(product_number), now_str, video_point] + padded
+    end_col = "T"  # A~T = 20컬럼
     if target_row:
-        ws.update(range_name=f"A{target_row}:S{target_row}", values=[row_data])
+        ws.update(range_name=f"A{target_row}:{end_col}{target_row}", values=[row_data])
     else:
         ws.append_row(row_data)
 
@@ -305,8 +357,8 @@ def load_draft(assignee: str, product_number: str) -> dict:
         rows = ws.get_all_values()
         for r in rows[1:]:
             if len(r) >= 2 and r[0].strip() == assignee and r[1].strip() == str(product_number):
-                links = (list(r[3:18]) + [""] * 15)[:15]
-                video_point = r[18].strip() if len(r) > 18 else ""
+                video_point = r[3].strip() if len(r) > 3 else ""
+                links = (list(r[4:19]) + [""] * 15)[:15]
                 return {"links": links, "video_point": video_point}
     except Exception:
         pass

@@ -47,8 +47,18 @@ from research_sheets import (
 def read_all():
     return _read_all_raw()
 
+@st.cache_data(ttl=60)
+def cached_worked_urls(assignee: str) -> set:
+    return get_staff_worked_urls(assignee)
+
+@st.cache_data(ttl=30)
+def cached_my_submissions(product_number: str, assignee: str) -> list:
+    return get_my_submissions(product_number, assignee, hide_url=True)
+
 def clear_cache():
     read_all.clear()
+    cached_worked_urls.clear()
+    cached_my_submissions.clear()
 
 # ─── 토큰 ────────────────────────────────────────────────────
 def _token_secret():
@@ -671,7 +681,7 @@ completed = [
 my_item = next((d for d in completed if d["assignee"] == name), None)
 
 try:
-    worked_urls = get_staff_worked_urls(name)
+    worked_urls = cached_worked_urls(name)
 except Exception:
     worked_urls = set()
 
@@ -923,7 +933,7 @@ with tab_my:
                     st.rerun()
 
             with st.expander(f"제출 내역 ({sc}개)"):
-                links = get_my_submissions(my_item["number"], name, hide_url=True)
+                links = cached_my_submissions(my_item["number"], name)
                 if links:
                     for idx, lnk in enumerate(links, 1):
                         st.markdown(f"- **#{idx}** [{lnk['platform']}] {lnk['submitted_at']}")

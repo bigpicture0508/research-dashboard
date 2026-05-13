@@ -698,7 +698,7 @@ if my_item:
                 st.markdown("**추가키워드** (제품 다른 표현)")
                 for ci2, t in enumerate(extra_list):
                     zh, en = t.get("zh",""), t.get("en","")
-                    ec1, ec2 = st.columns(2)
+                    ec1, ec2, ec3 = st.columns([2, 2, 1])
                     with ec1:
                         if zh and st.button(zh, key=f"ex_zh_{ci2}", use_container_width=True):
                             write_log(name, "검색오픈", f"추가/{zh}")
@@ -707,6 +707,13 @@ if my_item:
                         if en and st.button(en, key=f"ex_en_{ci2}", use_container_width=True):
                             write_log(name, "검색오픈", f"추가/{en}")
                             st.session_state.open_js = open_js(en); st.rerun()
+                    with ec3:
+                        if st.button("↗", key=f"ex_all_{ci2}", use_container_width=True):
+                            urls = list(make_urls(zh).values()) if zh else []
+                            if en and en != zh: urls += list(make_urls(en).values())
+                            write_log(name, "검색오픈", f"추가/{zh}/전체")
+                            st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
+                            st.rerun()
 
         # 직접 키워드 검색
         with st.expander("✏️ 직접 키워드 검색"):

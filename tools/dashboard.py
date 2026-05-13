@@ -947,7 +947,8 @@ with tab_my:
                     unclaim(my_item["row"])
                     clear_cache(); st.rerun()
 
-    st.divider()
+    else:
+        st.info("👈 **제품 선택** 탭에서 작업할 제품을 선택하세요.")
 
 with tab_select:
     st.subheader("📋 공유 제품 현황")
@@ -969,9 +970,7 @@ with tab_select:
                 c_info, c_stat, c_btn = st.columns([5, 2, 2])
                 with c_info:
                     st.markdown(f"**{n}번** — {t}")
-                    kws_preview = [k for k in item["keywords"] if k]
-                    if kws_preview:
-                        st.caption(" · ".join(kws_preview[:3]))
+                    pass
                 with c_stat:
                     if is_mine:
                         sc_i = item["submit_count"]

@@ -645,12 +645,12 @@ if my_item:
         for rank in range(1, 4):
             if rank > len(main_detail): break
             t = main_detail[rank - 1]
-            zh, en, ko = t.get("zh",""), t.get("en",""), t.get("ko","")
+            zh, en = t.get("zh",""), t.get("en","")
             label_zh = zh or en
             label_en = en or zh
-            col_ko, col_zh, col_en, col_all = st.columns([3, 2, 2, 2])
-            with col_ko:
-                st.markdown(f"**{rank}순위** <span style='color:#888;font-size:0.85em'>{ko}</span>", unsafe_allow_html=True)
+            col_rank, col_zh, col_en, col_all = st.columns([1, 2, 2, 2])
+            with col_rank:
+                st.markdown(f"**{rank}순위**")
             with col_zh:
                 if label_zh and st.button(label_zh, key=f"kw_zh_{rank}", use_container_width=True):
                     write_log(name, "검색오픈", f"제품{num}/{rank}/{label_zh}")
@@ -683,9 +683,9 @@ if my_item:
             for rank in range(4, 6):
                 if rank > len(main_detail): break
                 t = main_detail[rank - 1]
-                zh, en, ko = t.get("zh",""), t.get("en",""), t.get("ko","")
-                c1, c2, c3 = st.columns([3, 2, 2])
-                with c1: st.markdown(f"**{rank}순위** <span style='color:#888;font-size:0.85em'>{ko}</span>", unsafe_allow_html=True)
+                zh, en = t.get("zh",""), t.get("en","")
+                c1, c2, c3 = st.columns([1, 2, 2])
+                with c1: st.markdown(f"**{rank}순위**")
                 with c2:
                     if zh and st.button(zh, key=f"kw45_zh_{rank}", use_container_width=True):
                         st.session_state.open_js = open_js(zh); st.rerun()
@@ -697,14 +697,13 @@ if my_item:
                 st.markdown("---")
                 st.markdown("**추가키워드** (제품 다른 표현)")
                 for ci2, t in enumerate(extra_list):
-                    zh, en, ko = t.get("zh",""), t.get("en",""), t.get("ko","")
-                    ec1, ec2, ec3 = st.columns([3, 2, 2])
-                    with ec1: st.markdown(f"<span style='color:#888;font-size:0.85em'>{ko}</span>", unsafe_allow_html=True)
-                    with ec2:
+                    zh, en = t.get("zh",""), t.get("en","")
+                    ec1, ec2 = st.columns(2)
+                    with ec1:
                         if zh and st.button(zh, key=f"ex_zh_{ci2}", use_container_width=True):
                             write_log(name, "검색오픈", f"추가/{zh}")
                             st.session_state.open_js = open_js(zh); st.rerun()
-                    with ec3:
+                    with ec2:
                         if en and st.button(en, key=f"ex_en_{ci2}", use_container_width=True):
                             write_log(name, "검색오픈", f"추가/{en}")
                             st.session_state.open_js = open_js(en); st.rerun()

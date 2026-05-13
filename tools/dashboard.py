@@ -622,7 +622,7 @@ if is_admin:
                                 tecols = st.columns(min(len(t_extra_kws), 4))
                                 for ei, kw in enumerate(t_extra_kws):
                                     with tecols[ei % 4]:
-                                        if st.button(kw, key=f"t_ex_{ei}", use_container_width=True):
+                                        if st.button(str(kw), key=f"t_ex_{ei}", use_container_width=True):
                                             st.session_state.open_js = open_js(kw)
                                             st.rerun()
                         st.divider()
@@ -877,8 +877,10 @@ with tab_my:
             st.markdown("**📝 영상포인트**")
             vp_current = my_item.get("video_point", "")
             vp_key = f"vp_{my_item['row']}"
+            vp_draft_key = f"vp_draft_{my_item['row']}"
             if vp_key not in st.session_state:
-                st.session_state[vp_key] = vp_current
+                # 임시저장 우선, 없으면 시트 저장값
+                st.session_state[vp_key] = st.session_state.pop(vp_draft_key, None) or vp_current
             vp_text = st.text_area("영상 속 제품 특징 메모", value=st.session_state[vp_key],
                                    placeholder="예) 마스크팩 위에 덧바르는 수분 미스트, 냉장보관 강조, 30대 여성 타겟...",
                                    key=f"vp_area_{my_item['row']}", height=100,
@@ -906,10 +908,16 @@ with tab_my:
             draft_loaded = f"draft_loaded_{my_item['row']}"
 
             # 최초 진입 시 시트에서 임시저장 복원
+            vp_draft_key = f"vp_draft_{my_item['row']}"
             if not st.session_state.get(draft_loaded):
                 saved = load_draft(name, my_item["number"])
-                st.session_state[draft_key]    = saved
-                st.session_state[draft_loaded] = True
+                st.session_state[draft_key]     = saved["links"]
+                st.session_state[draft_loaded]  = True
+                # 영상포인트 임시저장 복원 (시트 저장값보다 임시저장 우선)
+                if saved["video_point"] and vp_key in st.session_state:
+                    st.session_state[vp_key] = saved["video_point"]
+                elif saved["video_point"]:
+                    st.session_state[vp_draft_key] = saved["video_point"]
 
             link_inputs = []
             for li in range(15):
@@ -949,7 +957,8 @@ with tab_my:
             with col_save:
                 if st.button("💾 임시저장", key=f"save_btn_{my_item['row']}", use_container_width=True,
                              disabled=not has_input):
-                    save_draft(name, my_item["number"], link_inputs)
+                    save_draft(name, my_item["number"], link_inputs,
+                               st.session_state.get(vp_key, ""))
                     st.toast("임시저장 완료 — 탭 닫아도 유지됩니다 ✅")
             with col_clr:
                 if st.button("🗑", key=f"clear_btn_{my_item['row']}", use_container_width=True,

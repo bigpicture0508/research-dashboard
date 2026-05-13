@@ -41,7 +41,8 @@ HEADERS = {
     ],
     TAB_DRAFTS: (
         ["직원이름", "제품번호", "저장일시"] +
-        [f"링크{i}" for i in range(1, 16)]
+        [f"링크{i}" for i in range(1, 16)] +
+        ["영상포인트"]
     ),
 }
 
@@ -275,8 +276,8 @@ def finish(row_num: int) -> str:
     return now_str
 
 
-def save_draft(assignee: str, product_number: str, links: list):
-    """링크 임시저장 (탭 닫아도 유지). 기존 같은 직원+제품 행은 덮어씀."""
+def save_draft(assignee: str, product_number: str, links: list, video_point: str = ""):
+    """링크 + 영상포인트 임시저장. 기존 같은 직원+제품 행은 덮어씀."""
     gc = get_client()
     sh = gc.open_by_key(SHEET_ID)
     ws = _ensure_tab(sh, TAB_DRAFTS)
@@ -288,15 +289,15 @@ def save_draft(assignee: str, product_number: str, links: list):
             break
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     padded = (links + [""] * 15)[:15]
-    row_data = [assignee, str(product_number), now_str] + padded
+    row_data = [assignee, str(product_number), now_str] + padded + [video_point]
     if target_row:
-        ws.update(range_name=f"A{target_row}:R{target_row}", values=[row_data])
+        ws.update(range_name=f"A{target_row}:S{target_row}", values=[row_data])
     else:
         ws.append_row(row_data)
 
 
-def load_draft(assignee: str, product_number: str) -> list:
-    """임시저장 링크 불러오기. 없으면 빈 리스트 15개."""
+def load_draft(assignee: str, product_number: str) -> dict:
+    """임시저장 불러오기. {"links": [...], "video_point": "..."}"""
     try:
         gc = get_client()
         sh = gc.open_by_key(SHEET_ID)
@@ -304,10 +305,12 @@ def load_draft(assignee: str, product_number: str) -> list:
         rows = ws.get_all_values()
         for r in rows[1:]:
             if len(r) >= 2 and r[0].strip() == assignee and r[1].strip() == str(product_number):
-                return (list(r[3:18]) + [""] * 15)[:15]
+                links = (list(r[3:18]) + [""] * 15)[:15]
+                video_point = r[18].strip() if len(r) > 18 else ""
+                return {"links": links, "video_point": video_point}
     except Exception:
         pass
-    return [""] * 15
+    return {"links": [""] * 15, "video_point": ""}
 
 
 def clear_draft(assignee: str, product_number: str):

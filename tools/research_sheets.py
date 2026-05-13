@@ -325,12 +325,16 @@ def finish(row_num: int) -> str:
 
 
 def save_draft(assignee: str, product_number: str, links: list,
-               video_point: str = ""):
-    """링크 + 영상포인트 + 확장포인트 임시저장.
+               video_point: str = "", expansion_point: str = ""):
+    """링크 + 확장포인트 임시저장.
     열 순서: A=직원이름 B=제품번호 C=저장일시 D=확장포인트 E~S=링크1~15"""
     gc = get_client()
     sh = gc.open_by_key(SHEET_ID)
     ws = _ensure_tab(sh, TAB_DRAFTS)
+    # 헤더 D열이 확장포인트인지 확인 후 아니면 업데이트
+    header = ws.row_values(1)
+    if len(header) >= 4 and header[3] != "확장포인트":
+        ws.update(range_name="A1:T1", values=[["직원이름", "제품번호", "저장일시", "확장포인트"] + [f"링크{i}" for i in range(1, 16)]])
     rows = ws.get_all_values()
     target_row = None
     for i, r in enumerate(rows[1:], 2):
@@ -339,9 +343,8 @@ def save_draft(assignee: str, product_number: str, links: list,
             break
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     padded = (links + [""] * 15)[:15]
-    # D=확장포인트, E~S=링크1~15
-    row_data = [assignee, str(product_number), now_str, video_point] + padded
-    end_col = "T"  # A~T = 20컬럼
+    row_data = [assignee, str(product_number), now_str, expansion_point] + padded
+    end_col = "T"
     if target_row:
         ws.update(range_name=f"A{target_row}:{end_col}{target_row}", values=[row_data])
     else:
@@ -357,12 +360,12 @@ def load_draft(assignee: str, product_number: str) -> dict:
         rows = ws.get_all_values()
         for r in rows[1:]:
             if len(r) >= 2 and r[0].strip() == assignee and r[1].strip() == str(product_number):
-                video_point = r[3].strip() if len(r) > 3 else ""
+                expansion_point = r[3].strip() if len(r) > 3 else ""
                 links = (list(r[4:19]) + [""] * 15)[:15]
-                return {"links": links, "video_point": video_point}
+                return {"links": links, "expansion_point": expansion_point}
     except Exception:
         pass
-    return {"links": [""] * 15, "video_point": ""}
+    return {"links": [""] * 15, "expansion_point": ""}
 
 
 def clear_draft(assignee: str, product_number: str):

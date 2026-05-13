@@ -99,6 +99,18 @@ def open_js(kw):
     urls = make_urls(kw)
     return "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls.values()) + "</script>"
 
+def _get_triplets(item_extra: dict, kws: list):
+    """extra JSON에서 main_detail, extra 트리플렛 추출. 구형 포맷 호환."""
+    main_detail = item_extra.get("main_detail", [])
+    extra_list  = item_extra.get("extra", [])
+    # 구형: main_detail 없으면 kws 문자열로 폴백
+    if not main_detail:
+        main_detail = [{"zh": k, "en": "", "ko": ""} for k in kws]
+    # extra 구형 dict 포맷 호환
+    if isinstance(extra_list, dict):
+        extra_list = [{"zh": k, "en": "", "ko": ""} for v in extra_list.values() for k in v if k]
+    return main_detail, extra_list
+
 # ─── 페이지 ──────────────────────────────────────────────────
 st.set_page_config(page_title="리서치 대시보드", page_icon="🔍", layout="wide",
                    initial_sidebar_state="collapsed")
@@ -624,61 +636,78 @@ if my_item:
             if yt_url:
                 st.link_button("▶ 원본 유튜브 보기", yt_url, use_container_width=True)
 
+        extra_json  = my_item.get("extra", {})
+        main_detail, extra_list = _get_triplets(extra_json, kws)
+
         st.markdown("**🔍 검색 열기**")
-        ba, bb, bc = st.columns(3)
-        with ba:
-            if st.button(f"1순위: {kws[0]}", key="ms1", type="primary", use_container_width=True):
-                write_log(name, "검색오픈", f"제품{num}/1/{kws[0]}")
-                st.session_state.open_js = open_js(kws[0])
-                st.rerun()
-        with bb:
-            if len(kws) > 1 and st.button(f"2순위: {kws[1]}", key="ms2", use_container_width=True):
-                write_log(name, "검색오픈", f"제품{num}/2/{kws[1]}")
-                st.session_state.open_js = open_js(kws[1])
-                st.rerun()
-        with bc:
-            if len(kws) > 2 and st.button(f"3순위: {kws[2]}", key="ms3", use_container_width=True):
-                write_log(name, "검색오픈", f"제품{num}/3/{kws[2]}")
-                st.session_state.open_js = open_js(kws[2])
-                st.rerun()
+
+        # 1~3순위 빠른 버튼
+        for rank in range(1, 4):
+            if rank > len(main_detail): break
+            t = main_detail[rank - 1]
+            zh, en, ko = t.get("zh",""), t.get("en",""), t.get("ko","")
+            label_zh = zh or en
+            label_en = en or zh
+            col_ko, col_zh, col_en, col_all = st.columns([3, 2, 2, 2])
+            with col_ko:
+                st.markdown(f"**{rank}순위** <span style='color:#888;font-size:0.85em'>{ko}</span>", unsafe_allow_html=True)
+            with col_zh:
+                if label_zh and st.button(label_zh, key=f"kw_zh_{rank}", use_container_width=True):
+                    write_log(name, "검색오픈", f"제품{num}/{rank}/{label_zh}")
+                    st.session_state.open_js = open_js(label_zh)
+                    st.rerun()
+            with col_en:
+                if label_en and st.button(label_en, key=f"kw_en_{rank}", use_container_width=True):
+                    write_log(name, "검색오픈", f"제품{num}/{rank}/{label_en}")
+                    st.session_state.open_js = open_js(label_en)
+                    st.rerun()
+            with col_all:
+                if st.button(f"↗ 전체열기", key=f"kw_all_{rank}", use_container_width=True):
+                    urls = list(make_urls(label_zh).values()) + (list(make_urls(label_en).values()) if label_en != label_zh else [])
+                    write_log(name, "검색오픈", f"제품{num}/{rank}/전체")
+                    st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
+                    st.rerun()
 
         # 1~3순위 전체 열기
         if st.button("🚀 1~3순위 전체 열기 (틱톡+샤오홍슈+도우인 동시)", key="ms_all", use_container_width=True):
-            top3 = kws[:3]
             all_urls = []
-            for kw in top3:
-                all_urls += list(make_urls(kw).values())
-            js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in all_urls) + "</script>"
+            for t in main_detail[:3]:
+                for kw in [t.get("zh",""), t.get("en","")]:
+                    if kw: all_urls += list(make_urls(kw).values())
             write_log(name, "전체검색오픈", f"제품{num}/1~3순위")
-            st.session_state.open_js = js
+            st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in all_urls) + "</script>"
             st.rerun()
 
-        with st.expander("키워드 선택 검색"):
-            write_log(name, "키워드열람", f"제품{num}")
-            for rank, kw in enumerate(kws, 1):
-                cb, cl = st.columns([2, 5])
-                with cb:
-                    if st.button(f"{rank}순위: {kw}", key=f"kw{rank}"):
-                        write_log(name, "검색오픈", f"제품{num}/{rank}/{kw}")
-                        st.session_state.open_js = open_js(kw)
-                        st.rerun()
-                with cl:
-                    st.markdown(" | ".join(f"[{n}]({u})" for n, u in make_urls(kw).items()))
+        # 4~5순위 + 추가키워드
+        with st.expander("4~5순위 및 추가키워드"):
+            for rank in range(4, 6):
+                if rank > len(main_detail): break
+                t = main_detail[rank - 1]
+                zh, en, ko = t.get("zh",""), t.get("en",""), t.get("ko","")
+                c1, c2, c3 = st.columns([3, 2, 2])
+                with c1: st.markdown(f"**{rank}순위** <span style='color:#888;font-size:0.85em'>{ko}</span>", unsafe_allow_html=True)
+                with c2:
+                    if zh and st.button(zh, key=f"kw45_zh_{rank}", use_container_width=True):
+                        st.session_state.open_js = open_js(zh); st.rerun()
+                with c3:
+                    if en and st.button(en, key=f"kw45_en_{rank}", use_container_width=True):
+                        st.session_state.open_js = open_js(en); st.rerun()
 
-            extra = my_item.get("extra", {})
-            all_extra_kws = []
-            for cat_kws in extra.values():
-                all_extra_kws.extend([k for k in cat_kws if k])
-            if all_extra_kws:
+            if extra_list:
                 st.markdown("---")
                 st.markdown("**추가키워드** (제품 다른 표현)")
-                ex_cols = st.columns(min(len(all_extra_kws), 4))
-                for ci2, kw in enumerate(all_extra_kws):
-                    with ex_cols[ci2 % 4]:
-                        if st.button(kw, key=f"ex_{ci2}", use_container_width=True):
-                            write_log(name, "검색오픈", f"추가/{kw}")
-                            st.session_state.open_js = open_js(kw)
-                            st.rerun()
+                for ci2, t in enumerate(extra_list):
+                    zh, en, ko = t.get("zh",""), t.get("en",""), t.get("ko","")
+                    ec1, ec2, ec3 = st.columns([3, 2, 2])
+                    with ec1: st.markdown(f"<span style='color:#888;font-size:0.85em'>{ko}</span>", unsafe_allow_html=True)
+                    with ec2:
+                        if zh and st.button(zh, key=f"ex_zh_{ci2}", use_container_width=True):
+                            write_log(name, "검색오픈", f"추가/{zh}")
+                            st.session_state.open_js = open_js(zh); st.rerun()
+                    with ec3:
+                        if en and st.button(en, key=f"ex_en_{ci2}", use_container_width=True):
+                            write_log(name, "검색오픈", f"추가/{en}")
+                            st.session_state.open_js = open_js(en); st.rerun()
 
         # 직접 키워드 검색
         with st.expander("✏️ 직접 키워드 검색"):

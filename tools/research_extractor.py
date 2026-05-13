@@ -33,20 +33,25 @@ _PROMPT = """아래 유튜브 영상 대본을 분석해서 틱톡/샤오홍슈/
 
 다음 JSON 형식만 반환하세요 (설명 없이):
 {{
-  "main": ["키워드1", "키워드2", "키워드3", "키워드4", "키워드5"],
-  "extra": {{
-    "产品/类别": ["...", "..."],
-    "使用场景": ["...", "..."],
-    "目标客户": ["...", "..."],
-    "问题/解决方案": ["...", "..."],
-    "hashtag": ["...", "..."]
-  }}
+  "main": [
+    {{"zh": "中文검색어", "en": "English search term", "ko": "한국어 의미 설명"}},
+    {{"zh": "...", "en": "...", "ko": "..."}},
+    {{"zh": "...", "en": "...", "ko": "..."}},
+    {{"zh": "...", "en": "...", "ko": "..."}},
+    {{"zh": "...", "en": "...", "ko": "..."}}
+  ],
+  "extra": [
+    {{"zh": "中文", "en": "English", "ko": "한국어 의미"}},
+    {{"zh": "...", "en": "...", "ko": "..."}},
+    {{"zh": "...", "en": "...", "ko": "..."}}
+  ]
 }}
 
 규칙:
-- main: 중요도 순 5개, 반드시 중국어(간체) 또는 영어만 사용 (한국어 금지)
-- extra 각 카테고리: 3~5개씩, 반드시 중국어(간체) 또는 영어만 사용 (한국어 금지)
-- 틱톡/샤오홍슈/도우인 실제 검색에 쓸 구체적 단어/구
+- main: 중요도 순 5개 키워드, 각각 zh(중국어간체)/en(영어)/ko(한국어 뜻) 세트로
+- extra: 제품의 다른 표현/유사어 3~8개, 각각 zh/en/ko 세트로
+- zh, en: 틱톡/샤오홍슈/도우인 실제 검색에 쓸 단어/구
+- ko: 검색어가 무슨 뜻인지 한국어로 짧게 설명 (검색용 아님)
 - JSON만 반환"""
 
 
@@ -59,12 +64,33 @@ def _parse(text: str):
                     text = p
                     break
         data = json.loads(text)
-        main  = [str(k).strip() for k in data.get("main", [])[:5]]
-        extra = {
-            str(cat): [str(k).strip() for k in kws if str(k).strip()]
-            for cat, kws in data.get("extra", {}).items()
-            if isinstance(kws, list)
-        }
+
+        def _to_triplet(item):
+            if isinstance(item, dict):
+                return {
+                    "zh": str(item.get("zh", "")).strip(),
+                    "en": str(item.get("en", "")).strip(),
+                    "ko": str(item.get("ko", "")).strip(),
+                }
+            # 구형 문자열 포맷 호환
+            return {"zh": str(item).strip(), "en": "", "ko": ""}
+
+        main_raw = data.get("main", [])[:5]
+        main_triplets = [_to_triplet(m) for m in main_raw]
+        main = [t["zh"] or t["en"] for t in main_triplets]  # D~H열용 단일 문자열
+
+        extra_raw = data.get("extra", [])
+        if isinstance(extra_raw, list):
+            extra_triplets = [_to_triplet(e) for e in extra_raw]
+        else:
+            # 구형 dict 포맷 호환
+            extra_triplets = []
+            for kws in extra_raw.values():
+                for k in kws:
+                    if k:
+                        extra_triplets.append({"zh": str(k), "en": "", "ko": ""})
+
+        extra = {"main_detail": main_triplets, "extra": extra_triplets}
         return main, extra
     except Exception:
         return [], {}

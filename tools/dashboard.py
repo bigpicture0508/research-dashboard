@@ -371,12 +371,13 @@ if is_admin:
             st.success("✅ 대기 중인 항목이 없습니다.")
 
         # 번호 재정렬 단독 버튼
-        with st.expander("🔢 번호 재정렬만 하기"):
-            st.caption("제품이 중간에 삭제된 경우 번호를 1부터 다시 정렬합니다.")
-            if st.button("번호 재정렬 실행"):
-                from research_sheets import renumber_all
-                renumber_all()
-                st.success("재정렬 완료!")
+        st.markdown("---")
+        st.caption("제품이 중간에 삭제된 경우 번호를 1부터 다시 정렬합니다.")
+        if st.button("🔢 번호 재정렬 실행", key="renumber_btn"):
+            renumber_all()
+            clear_cache()
+            st.success("재정렬 완료!")
+            st.rerun()
 
     # ── 제품 현황 ────────────────────────────────────────────
     with tab_status:

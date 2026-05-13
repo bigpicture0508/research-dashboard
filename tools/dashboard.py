@@ -975,27 +975,26 @@ with tab_select:
                 with c_stat:
                     if is_mine:
                         sc_i = item["submit_count"]
-                        st.markdown(f"📌 **내 작업 중**")
+                        st.markdown("📌 **내가 작업중**")
                         st.caption(f"{sc_i}/{TARGET_LINKS}개")
                     elif already:
                         st.markdown("✅ **내가 완료**")
                     elif assignee:
-                        st.markdown("🔒 **작업 중**")
-                        st.caption(assignee[:3] + "***")
+                        st.markdown("👤 **다른 분 작업중**")
                     else:
                         st.markdown("🟢 **선택 가능**")
                 with c_btn:
                     if is_mine:
-                        st.button("진행 중", key=f"busy_mine_{item['row']}", disabled=True,
+                        st.button("내가 작업중", key=f"busy_mine_{item['row']}", disabled=True,
                                   use_container_width=True)
                     elif already:
                         st.button("완료됨", key=f"done_{item['row']}", disabled=True,
                                   use_container_width=True)
                     elif assignee:
-                        st.button("선택 불가", key=f"taken_{item['row']}", disabled=True,
+                        st.button("다른 분 작업중", key=f"taken_{item['row']}", disabled=True,
                                   use_container_width=True)
                     elif my_item:
-                        st.button("현재 작업 먼저 완료", key=f"busy_{item['row']}", disabled=True,
+                        st.button("내 작업 먼저 완료", key=f"busy_{item['row']}", disabled=True,
                                   use_container_width=True,
                                   help="작업 중인 제품을 마무리하거나 반납해야 새 제품을 선택할 수 있습니다.")
                     else:

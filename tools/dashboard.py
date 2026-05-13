@@ -129,6 +129,15 @@ st.markdown("""
 <style>
 body { -webkit-user-select:none; user-select:none; }
 a, button { -webkit-user-select:auto; user-select:auto; }
+.red-btn-wrap button {
+    background-color: #e53935 !important;
+    color: white !important;
+    border: none !important;
+    font-weight: 700 !important;
+}
+.red-btn-wrap button:hover {
+    background-color: #b71c1c !important;
+}
 .watermark {
     position:fixed; top:50%; left:50%;
     transform:translate(-50%,-50%) rotate(-30deg);
@@ -747,6 +756,7 @@ with tab_my:
                         st.rerun()
 
             # 1~3순위 전체 열기
+            st.markdown('<div class="red-btn-wrap">', unsafe_allow_html=True)
             if st.button("🚀 1~3순위 전체 열기 (틱톡+샤오홍슈+도우인 동시)", key="ms_all", use_container_width=True):
                 all_urls = []
                 for t in main_detail[:3]:
@@ -755,6 +765,7 @@ with tab_my:
                 write_log(name, "전체검색오픈", f"제품{num}/1~3순위")
                 st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in all_urls) + "</script>"
                 st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
             # 4~5순위 + 추가키워드
             with st.expander("4~5순위 및 추가키워드"):

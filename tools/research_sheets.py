@@ -411,11 +411,55 @@ def allow_revision(row_num: int):
     ws.update(range_name=f"N{row_num}:O{row_num}", values=[["", "Y"]])
 
 
+def fill_assign_ext_points(channel_num: int = 1):
+    """영상소스 직원_확장포인트 + 확장포인트2 → 배정탭 확장포인트 자동 채우기.
+    둘 중 하나만 있어도 채워진 걸로. 이미 값 있으면 덮어쓰지 않음.
+    """
+    import time as _t
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+
+    group_start = ((channel_num - 1) // 5) * 5 + 1
+    group_end   = min(group_start + 4, 50)
+    assign_tab  = f"배정_{group_start}~{group_end}"
+    ws_assign   = sh.worksheet(assign_tab)
+    rows        = ws_assign.get_all_values()
+    headers     = rows[0] if rows else []
+
+    ext_ci = next((i for i, h in enumerate(headers) if h == f"채널{channel_num}_확장포인트"), None)
+    if ext_ci is None:
+        return
+
+    ws_src   = sh.worksheet(TAB_VIDEO_SOURCE)
+    src_rows = ws_src.get_all_values()
+    src_map  = {r[1].strip(): r for r in src_rows[1:] if len(r) > 1 and r[1].strip()}
+
+    updates = []
+    for ri, row in enumerate(rows[1:], start=2):
+        yt_url = row[1].strip() if len(row) > 1 else ""
+        if not yt_url:
+            continue
+        cur_ext = row[ext_ci].strip() if ext_ci < len(row) else ""
+        if cur_ext:
+            continue  # 이미 값 있으면 건드리지 않음
+        src = src_map.get(yt_url, [])
+        d = src[3].strip() if len(src) > 3 else ""
+        e = src[4].strip() if len(src) > 4 else ""
+        merged = " / ".join(filter(None, [d, e]))
+        if merged:
+            updates.append({"range": f"{chr(65 + ext_ci)}{ri}", "values": [[merged]]})
+
+    if updates:
+        ws_assign.batch_update(updates)
+        print(f"✅ 배정탭 확장포인트 {len(updates)}개 자동 채움")
+
+
 def sync_to_channel_input(channel_num: int = 1) -> list:
     """배정탭에서 채널N_배정 체크된 행 → 해당 채널 입력탭 적재.
     확장포인트 = 배정탭 우선, 없으면 영상소스 직원_확장포인트+확장포인트2 합치기.
     반환: 적재된 유튜브링크 목록
     """
+    fill_assign_ext_points(channel_num)
     import time as _t
     gc = get_client()
     sh = gc.open_by_key(SHEET_ID)

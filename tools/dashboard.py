@@ -379,6 +379,67 @@ if is_admin:
             st.success("재정렬 완료!")
             st.rerun()
 
+        # 기존 키워드 영어+한국어 번역
+        st.markdown("---")
+        st.caption("기존에 추출된 키워드에 영어/한국어가 없는 경우 번역합니다.")
+        if st.button("🌐 키워드 영어+한국어 번역 실행", key="translate_btn"):
+            import anthropic, os
+            try:
+                api_key = str(st.secrets.get("ANTHROPIC_API_KEY", "")) or os.environ.get("ANTHROPIC_API_KEY", "")
+                cli = anthropic.Anthropic(api_key=api_key)
+            except Exception as e:
+                st.error(f"API 클라이언트 오류: {e}"); st.stop()
+
+            rows = read_all()
+            needs = [r for r in rows if r["status"] == "완료" and
+                     not r.get("extra", {}).get("main_detail")]
+            if not needs:
+                st.success("번역이 필요한 항목이 없습니다.")
+            else:
+                prog = st.progress(0, text=f"0/{len(needs)} 번역 중...")
+                ok = 0
+                for idx, row in enumerate(needs):
+                    kws = [k for k in row["keywords"] if k]
+                    extra_old = row.get("extra", {})
+                    old_extras = []
+                    if isinstance(extra_old, dict):
+                        for v in extra_old.values():
+                            if isinstance(v, list):
+                                old_extras += [k for k in v if k]
+                    all_kws = kws + old_extras
+                    if not all_kws:
+                        prog.progress((idx+1)/len(needs)); continue
+                    prompt = (
+                        "아래 중국어(간체) 검색키워드 목록을 영어와 한국어로 번역하세요.\n"
+                        "JSON 배열만 반환 (설명 없이):\n"
+                        '[{"zh":"원문","en":"English","ko":"한국어 뜻"},...]'
+                        f"\n\n키워드: {json.dumps(all_kws, ensure_ascii=False)}"
+                    )
+                    try:
+                        msg = cli.messages.create(
+                            model="claude-haiku-4-5-20251001", max_tokens=400,
+                            messages=[{"role":"user","content":prompt}])
+                        raw = msg.content[0].text.strip()
+                        if "```" in raw:
+                            raw = raw.split("```")[1].lstrip("json").strip()
+                        triplets = json.loads(raw)
+                        main_detail = []
+                        for t in triplets[:5]:
+                            main_detail.append({"zh": t.get("zh",""), "en": t.get("en",""), "ko": t.get("ko","")})
+                        extra_triplets = []
+                        for t in triplets[5:]:
+                            extra_triplets.append({"zh": t.get("zh",""), "en": t.get("en",""), "ko": t.get("ko","")})
+                        new_extra = {"main_detail": main_detail, "extra": extra_triplets}
+                        write_keywords(row["row"], kws, new_extra)
+                        ok += 1
+                        time.sleep(0.5)
+                    except Exception as e:
+                        st.warning(f"#{row['number']} 번역 실패: {e}")
+                    prog.progress((idx+1)/len(needs), text=f"{idx+1}/{len(needs)} 번역 중...")
+                clear_cache()
+                st.success(f"번역 완료 {ok}/{len(needs)}개")
+                st.rerun()
+
     # ── 제품 현황 ────────────────────────────────────────────
     with tab_status:
         st.header("제품 현황")
@@ -646,25 +707,27 @@ if my_item:
         for rank in range(1, 4):
             if rank > len(main_detail): break
             t = main_detail[rank - 1]
-            zh, en = t.get("zh",""), t.get("en","")
-            label_zh = zh or en
-            label_en = en or zh
-            col_rank, col_zh, col_en, col_all = st.columns([1, 2, 2, 2])
+            zh, en, ko = t.get("zh",""), t.get("en",""), t.get("ko","")
+            col_rank, col_zh, col_en, col_all = st.columns([2, 2, 2, 1])
             with col_rank:
                 st.markdown(f"**{rank}순위**")
+                if ko: st.caption(ko)
             with col_zh:
-                if label_zh and st.button(label_zh, key=f"kw_zh_{rank}", use_container_width=True):
-                    write_log(name, "검색오픈", f"제품{num}/{rank}/{label_zh}")
-                    st.session_state.open_js = open_js(label_zh)
+                if zh and st.button(zh, key=f"kw_zh_{rank}", use_container_width=True):
+                    write_log(name, "검색오픈", f"제품{num}/{rank}/{zh}")
+                    st.session_state.open_js = open_js(zh)
                     st.rerun()
             with col_en:
-                if label_en and st.button(label_en, key=f"kw_en_{rank}", use_container_width=True):
-                    write_log(name, "검색오픈", f"제품{num}/{rank}/{label_en}")
-                    st.session_state.open_js = open_js(label_en)
+                if en and st.button(en, key=f"kw_en_{rank}", use_container_width=True):
+                    write_log(name, "검색오픈", f"제품{num}/{rank}/{en}")
+                    st.session_state.open_js = open_js(en)
                     st.rerun()
+                elif not en:
+                    st.caption("(번역 필요)")
             with col_all:
-                if st.button(f"↗ 전체열기", key=f"kw_all_{rank}", use_container_width=True):
-                    urls = list(make_urls(label_zh).values()) + (list(make_urls(label_en).values()) if label_en != label_zh else [])
+                if st.button("↗", key=f"kw_all_{rank}", use_container_width=True):
+                    urls = list(make_urls(zh).values()) if zh else []
+                    if en and en != zh: urls += list(make_urls(en).values())
                     write_log(name, "검색오픈", f"제품{num}/{rank}/전체")
                     st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
                     st.rerun()
@@ -684,9 +747,11 @@ if my_item:
             for rank in range(4, 6):
                 if rank > len(main_detail): break
                 t = main_detail[rank - 1]
-                zh, en = t.get("zh",""), t.get("en","")
-                c1, c2, c3 = st.columns([1, 2, 2])
-                with c1: st.markdown(f"**{rank}순위**")
+                zh, en, ko = t.get("zh",""), t.get("en",""), t.get("ko","")
+                c1, c2, c3 = st.columns([2, 2, 2])
+                with c1:
+                    st.markdown(f"**{rank}순위**")
+                    if ko: st.caption(ko)
                 with c2:
                     if zh and st.button(zh, key=f"kw45_zh_{rank}", use_container_width=True):
                         st.session_state.open_js = open_js(zh); st.rerun()
@@ -720,16 +785,48 @@ if my_item:
         with st.expander("✏️ 직접 키워드 검색"):
             row_id = my_item["row"]
             ck_key = f"custom_kw_{row_id}"
+            tr_key = f"custom_translated_{row_id}"
             col_inp, col_btn = st.columns([4, 1])
             with col_inp:
-                custom_kw = st.text_input("검색어", placeholder="예: facial mist, 补水喷雾",
-                                          key=ck_key, label_visibility="collapsed")
+                st.text_input("한국어/중국어/영어로 입력", placeholder="예: 뜯는 페인트, rental room renovation...",
+                              key=ck_key, label_visibility="collapsed")
             with col_btn:
-                if st.button("🔍 검색", key=f"custom_search_{row_id}", use_container_width=True):
+                if st.button("🔍 번역+검색", key=f"custom_search_{row_id}", use_container_width=True):
                     kw = st.session_state.get(ck_key, "").strip()
                     if kw:
-                        write_log(name, "직접검색", kw)
-                        st.session_state.open_js = open_js(kw)
+                        import anthropic as _ant, os as _os
+                        try:
+                            _api = str(st.secrets.get("ANTHROPIC_API_KEY","")) or _os.environ.get("ANTHROPIC_API_KEY","")
+                            _cli = _ant.Anthropic(api_key=_api)
+                            _msg = _cli.messages.create(
+                                model="claude-haiku-4-5-20251001", max_tokens=150,
+                                messages=[{"role":"user","content":
+                                    f'"{kw}"를 틱톡/샤오홍슈/도우인 검색용으로 중국어(간체)와 영어로 번역.\n'
+                                    'JSON만 반환: {"zh":"중국어","en":"English"}'}])
+                            _raw = _msg.content[0].text.strip()
+                            if "```" in _raw: _raw = _raw.split("```")[1].lstrip("json").strip()
+                            _tr = json.loads(_raw)
+                            st.session_state[tr_key] = {"zh": _tr.get("zh",""), "en": _tr.get("en",""), "orig": kw}
+                        except Exception:
+                            st.session_state[tr_key] = {"zh": kw, "en": kw, "orig": kw}
+                        write_log(name, "직접검색번역", kw)
+                        st.rerun()
+
+            # 번역 결과 버튼
+            if tr_key in st.session_state:
+                tr = st.session_state[tr_key]
+                st.markdown(f"**'{tr['orig']}'** 번역 결과")
+                tb1, tb2, tb3 = st.columns(3)
+                with tb1:
+                    if tr["zh"] and st.button(tr["zh"], key=f"tr_zh_{row_id}", use_container_width=True):
+                        st.session_state.open_js = open_js(tr["zh"]); st.rerun()
+                with tb2:
+                    if tr["en"] and st.button(tr["en"], key=f"tr_en_{row_id}", use_container_width=True):
+                        st.session_state.open_js = open_js(tr["en"]); st.rerun()
+                with tb3:
+                    if st.button("↗ 둘 다 열기", key=f"tr_all_{row_id}", use_container_width=True):
+                        urls = list(make_urls(tr["zh"]).values()) + list(make_urls(tr["en"]).values())
+                        st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
                         st.rerun()
 
         st.divider()

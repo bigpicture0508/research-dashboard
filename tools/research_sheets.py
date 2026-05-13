@@ -49,7 +49,7 @@ HEADERS = {
     ),
     TAB_VIDEO_SOURCE: (
         ["썸네일", "유튜브링크", "제목", "직원_확장포인트", "확장포인트2"] +
-        [f"재료링크{i}" for i in range(1, MATERIAL_LINK_COUNT + 1)]
+        [f"링크{i}" for i in range(1, MATERIAL_LINK_COUNT + 1)]
     ),
 }
 

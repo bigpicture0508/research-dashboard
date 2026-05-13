@@ -564,10 +564,39 @@ if my_item:
             st.markdown(f"**{num}번** — {title}")
             st.caption(f"1순위: {top_kw}")
         with cs:
-            if st.button(f"🔍 영상 찾기", key="ms", type="primary", use_container_width=True):
-                write_log(name, "검색오픈", f"제품{num}/{top_kw}")
-                st.session_state.open_js = open_js(top_kw)
+            # 원본 유튜브 보기
+            yt_url = my_item.get("url", "")
+            if yt_url:
+                st.link_button("▶ 원본 유튜브 보기", yt_url, use_container_width=True)
+
+        st.markdown("**🔍 검색 열기**")
+        ba, bb, bc = st.columns(3)
+        with ba:
+            if st.button(f"1순위: {kws[0]}", key="ms1", type="primary", use_container_width=True):
+                write_log(name, "검색오픈", f"제품{num}/1/{kws[0]}")
+                st.session_state.open_js = open_js(kws[0])
                 st.rerun()
+        with bb:
+            if len(kws) > 1 and st.button(f"2순위: {kws[1]}", key="ms2", use_container_width=True):
+                write_log(name, "검색오픈", f"제품{num}/2/{kws[1]}")
+                st.session_state.open_js = open_js(kws[1])
+                st.rerun()
+        with bc:
+            if len(kws) > 2 and st.button(f"3순위: {kws[2]}", key="ms3", use_container_width=True):
+                write_log(name, "검색오픈", f"제품{num}/3/{kws[2]}")
+                st.session_state.open_js = open_js(kws[2])
+                st.rerun()
+
+        # 1~3순위 전체 열기
+        if st.button("🚀 1~3순위 전체 열기 (틱톡+샤오홍슈+도우인 동시)", key="ms_all", use_container_width=True):
+            top3 = kws[:3]
+            all_urls = []
+            for kw in top3:
+                all_urls += list(make_urls(kw).values())
+            js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in all_urls) + "</script>"
+            write_log(name, "전체검색오픈", f"제품{num}/1~3순위")
+            st.session_state.open_js = js
+            st.rerun()
 
         with st.expander("키워드 선택 검색"):
             write_log(name, "키워드열람", f"제품{num}")
@@ -584,7 +613,7 @@ if my_item:
             extra = my_item.get("extra", {})
             if extra:
                 st.markdown("---")
-                st.markdown("**관점별 추가 키워드**")
+                st.markdown("**관점별 추가 키워드** (AI가 대본을 분석해 분류)")
                 for cat, cat_kws in extra.items():
                     if not cat_kws: continue
                     st.markdown(f"*{cat}*")
@@ -596,30 +625,45 @@ if my_item:
                                 st.session_state.open_js = open_js(kw)
                                 st.rerun()
 
+        # 직접 키워드 검색
+        with st.expander("✏️ 직접 키워드 검색"):
+            custom_kw = st.text_input("검색어 직접 입력", placeholder="예: facial mist, 补水喷雾", key="custom_kw")
+            if st.button("🔍 직접 검색", key="custom_search", disabled=not custom_kw.strip()):
+                write_log(name, "직접검색", f"{custom_kw}")
+                st.session_state.open_js = open_js(custom_kw.strip())
+                st.rerun()
+
         st.divider()
 
         # 링크 제출
         sc      = my_item["submit_count"]
         done_at = my_item["done_at"]
-        st.markdown("**📎 링크 제출**")
+        st.markdown("**📎 링크 제출** (최대 15개 한번에)")
         if sc >= TARGET_LINKS:
             st.success(f"✅ {sc}개 완료 — {done_at}")
         else:
             st.progress(min(sc / TARGET_LINKS, 1.0), text=f"{sc} / {TARGET_LINKS}개")
 
         with st.form(key=f"sf_{my_item['row']}", clear_on_submit=True):
-            new_link = st.text_input("링크 붙여넣기", placeholder="https://www.tiktok.com/...")
-            if st.form_submit_button("제출", type="primary", use_container_width=True):
-                if new_link.strip():
-                    with st.spinner("저장 중..."):
-                        res = submit_link(my_item["row"], my_item["number"],
-                                          my_item["title"], name, new_link.strip())
-                    write_log(name, "링크제출", f"제품{num}/{new_link.strip()[:50]}")
-                    if res["done"] and sc < TARGET_LINKS:
+            link_inputs = []
+            for li in range(15):
+                lv = st.text_input(f"링크 {li+1}", placeholder="https://...", key=f"link_{li}",
+                                   label_visibility="collapsed" if li > 0 else "visible")
+                link_inputs.append(lv)
+            if st.form_submit_button("📤 한번에 제출", type="primary", use_container_width=True):
+                valid_links = [l.strip() for l in link_inputs if l.strip()]
+                if valid_links:
+                    with st.spinner(f"{len(valid_links)}개 저장 중..."):
+                        res = None
+                        for lnk in valid_links:
+                            res = submit_link(my_item["row"], my_item["number"],
+                                              my_item["title"], name, lnk)
+                            write_log(name, "링크제출", f"제품{num}/{lnk[:50]}")
+                    if res and res["done"] and sc < TARGET_LINKS:
                         st.balloons()
                         st.success(f"🎉 {TARGET_LINKS}개 달성! 급여 대상 등록 완료.")
                     else:
-                        st.success(f"저장 완료 — 현재 {res['count']}개")
+                        st.success(f"{len(valid_links)}개 저장 완료 — 현재 {res['count']}개")
                     clear_cache(); st.rerun()
 
         with st.expander(f"제출 내역 ({sc}개)"):

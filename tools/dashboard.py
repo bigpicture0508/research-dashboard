@@ -711,6 +711,13 @@ with st.expander("🔑 처음 사용 시 — 플랫폼 로그인 (한 번만)", 
             )
             st.rerun()
 
+    st.divider()
+    st.markdown("**🎬 도우인 세션 유지**")
+    st.caption("도우인은 탭을 열어둬야 로그인이 유지됩니다. 작업 시작할 때 아래 버튼을 누르고 그 탭을 닫지 마세요.")
+    if st.button("📌 도우인 탭 열어두기 (작업 중 닫지 마세요)", key="douyin_keep", use_container_width=True):
+        st.session_state.open_js = '<script>window.open("https://www.douyin.com/","_blank");</script>'
+        st.rerun()
+
 # ── 탭 분리 ──────────────────────────────────────────────────
 tab_my, tab_select = st.tabs(["📌 내 작업", "📋 제품 선택"])
 

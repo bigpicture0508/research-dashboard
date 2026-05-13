@@ -6,6 +6,8 @@
 import sys
 import json
 import time
+import hmac
+import hashlib
 import tempfile
 from pathlib import Path
 from urllib.parse import quote
@@ -46,6 +48,35 @@ def read_all():
 
 def clear_cache():
     read_all.clear()
+
+# ─── 토큰 ────────────────────────────────────────────────────
+def _token_secret():
+    try:
+        return str(st.secrets["admin_password"])
+    except Exception:
+        return "fallback_secret"
+
+def _make_token(name: str, is_admin: bool, login_at: float) -> str:
+    payload = f"{name}|{int(is_admin)}|{int(login_at)}"
+    sig = hmac.new(_token_secret().encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]  # type: ignore
+    return f"{payload}|{sig}"
+
+def _verify_token(token: str):
+    try:
+        parts = token.split("|")
+        if len(parts) != 4:
+            return None
+        name, is_admin_s, login_at_s, sig = parts
+        payload = f"{name}|{is_admin_s}|{login_at_s}"
+        expected = hmac.new(_token_secret().encode(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+        if not hmac.compare_digest(sig, expected):
+            return None
+        login_at = float(login_at_s)
+        if _now() - login_at > SESSION_HOURS * 3600:
+            return None
+        return {"name": name, "is_admin": is_admin_s == "1", "login_at": login_at}
+    except Exception:
+        return None
 
 # ─── 상수 ────────────────────────────────────────────────────
 SESSION_HOURS = 2
@@ -89,9 +120,27 @@ a, button { -webkit-user-select:auto; user-select:auto; }
 def _now(): return time.time()
 
 for k, v in [("open_js",""),("authenticated",False),("is_admin",False),
-             ("my_name",""),("login_at",0.0),("pin_tries",0),("locked_until",0.0)]:
+             ("my_name",""),("login_at",0.0),("pin_tries",0),("locked_until",0.0),
+             ("_token_loaded", False)]:
     if k not in st.session_state:
         st.session_state[k] = v
+
+# query_params 토큰으로 세션 복원 (새로고침 대응)
+if not st.session_state._token_loaded:
+    st.session_state._token_loaded = True
+    try:
+        token = st.query_params.get("t", "")
+        if token and not st.session_state.authenticated:
+            info = _verify_token(token)
+            if info:
+                st.session_state.update(
+                    authenticated=True,
+                    is_admin=info["is_admin"],
+                    my_name=info["name"],
+                    login_at=info["login_at"],
+                )
+    except Exception:
+        pass
 
 if st.session_state.open_js:
     components.html(st.session_state.open_js, height=0)
@@ -105,6 +154,7 @@ if st.session_state.authenticated:
         for k in ["authenticated","is_admin","my_name","login_at"]:
             st.session_state[k] = False if isinstance(st.session_state[k], bool) else (
                 "" if isinstance(st.session_state[k], str) else 0.0)
+        st.query_params.clear()
         st.warning(f"{SESSION_HOURS}시간 후 자동 로그아웃되었습니다. 다시 로그인해주세요.")
         st.rerun()
 
@@ -133,8 +183,10 @@ if not st.session_state.authenticated:
             if not name or not pin:
                 st.warning("이름과 PIN을 모두 입력해주세요.")
             elif pins.get(name) == pin:
+                login_at = _now()
                 st.session_state.update(authenticated=True, is_admin=False,
-                                        my_name=name, login_at=_now(), pin_tries=0)
+                                        my_name=name, login_at=login_at, pin_tries=0)
+                st.query_params["t"] = _make_token(name, False, login_at)
                 write_log(name, "로그인")
                 st.rerun()
             else:
@@ -155,8 +207,10 @@ if not st.session_state.authenticated:
             except Exception:
                 correct = ""
             if pw.strip() == correct and correct:
+                login_at = _now()
                 st.session_state.update(authenticated=True, is_admin=True,
-                                        my_name="관리자", login_at=_now())
+                                        my_name="관리자", login_at=login_at)
+                st.query_params["t"] = _make_token("관리자", True, login_at)
                 write_log("관리자", "로그인")
                 st.rerun()
             else:
@@ -180,6 +234,7 @@ with c_out:
     if st.button("로그아웃"):
         write_log(name, "로그아웃")
         for k in list(st.session_state.keys()): del st.session_state[k]
+        st.query_params.clear()
         st.rerun()
 
 if not is_admin:

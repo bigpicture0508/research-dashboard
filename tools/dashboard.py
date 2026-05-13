@@ -772,16 +772,21 @@ with tab_my:
                         st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
                         st.rerun()
 
-            # 1~3순위 전체 열기
+            # 1~3순위 전체 열기 (중국어 / 영어 분리)
             st.markdown('<div class="red-btn-wrap">', unsafe_allow_html=True)
-            if st.button("🚀 1~3순위 전체 열기 (틱톡+샤오홍슈+도우인 동시)", key="ms_all", use_container_width=True):
-                all_urls = []
-                for t in main_detail[:3]:
-                    for kw in [t.get("zh",""), t.get("en","")]:
-                        if kw: all_urls += list(make_urls(kw).values())
-                write_log(name, "전체검색오픈", f"제품{num}/1~3순위")
-                st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in all_urls) + "</script>"
-                st.rerun()
+            ball, ball_en = st.columns(2)
+            with ball:
+                if st.button("🚀 1~3순위 중국어로 전체열기 (9개)", key="ms_all_zh", use_container_width=True):
+                    urls = [u for t in main_detail[:3] for u in make_urls(t.get("zh","")).values() if t.get("zh","")]
+                    write_log(name, "전체검색오픈", f"제품{num}/1~3순위/중국어")
+                    st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
+                    st.rerun()
+            with ball_en:
+                if st.button("🚀 1~3순위 영어로 전체열기 (9개)", key="ms_all_en", use_container_width=True):
+                    urls = [u for t in main_detail[:3] for u in make_urls(t.get("en","")).values() if t.get("en","")]
+                    write_log(name, "전체검색오픈", f"제품{num}/1~3순위/영어")
+                    st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
+                    st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
             # 4~5순위 + 추가키워드

@@ -52,17 +52,22 @@ HEADERS = {
 
 _client_cache = {}
 
-def get_client():
+def get_client(force_refresh=False):
     key = str(CREDS_PATH)
-    if key not in _client_cache:
+    if force_refresh or key not in _client_cache:
         creds = Credentials.from_service_account_file(str(CREDS_PATH), scopes=SCOPES)
         _client_cache[key] = gspread.authorize(creds)
     return _client_cache[key]
 
 
 def _get_ws(tab_name=TAB_RESEARCH):
-    """자주 쓰는 워크시트를 빠르게 반환."""
-    return get_client().open_by_key(SHEET_ID).worksheet(tab_name)
+    """워크시트 반환. SSL 끊김 시 자동 재연결."""
+    try:
+        return get_client().open_by_key(SHEET_ID).worksheet(tab_name)
+    except Exception as e:
+        if "ssl" in str(e).lower() or "eof" in str(e).lower() or "connection" in str(e).lower():
+            return get_client(force_refresh=True).open_by_key(SHEET_ID).worksheet(tab_name)
+        raise
 
 
 def _ensure_tab(sh, tab_name):

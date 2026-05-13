@@ -796,7 +796,7 @@ with tab_my:
                                 st.rerun()
 
             # 직접 키워드 검색
-            with st.expander("✏️ 직접 키워드 검색"):
+            with st.expander("✏️ 직접 키워드 검색", expanded=True):
                 row_id = my_item["row"]
                 ck_key = f"custom_kw_{row_id}"
                 tr_key = f"custom_translated_{row_id}"

@@ -696,8 +696,13 @@ except Exception:
 
 # ── 플랫폼 로그인 가이드 ──────────────────────────────────────
 with st.expander("🔑 처음 사용 시 — 플랫폼 로그인 (한 번만)", expanded=False):
-    st.markdown("아래 버튼으로 각 플랫폼에 로그인해두면 검색 시 자동으로 로그인 상태가 유지됩니다.")
-    st.caption("⚠️ 반드시 **크롬** 브라우저 사용 / 시크릿 모드 사용 금지")
+    st.markdown("""
+**작업 시작 전 순서대로 해주세요:**
+1. 반드시 **크롬** 브라우저 사용 (시크릿 모드 금지)
+2. 아래에서 각 플랫폼 로그인
+3. 도우인 + 샤오홍슈 탭 열어두기 버튼 클릭 → **그 탭들은 작업 중 절대 닫지 마세요**
+""")
+    st.caption("도우인·샤오홍슈는 탭을 열어둬야 로그인 상태가 유지됩니다.")
     la, lb = st.columns(2)
     with la:
         st.link_button("🎵 TikTok 로그인", "https://www.tiktok.com/login", use_container_width=True)
@@ -760,46 +765,23 @@ with tab_my:
                 if rank > len(main_detail): break
                 t = main_detail[rank - 1]
                 zh, en, ko = t.get("zh",""), t.get("en",""), t.get("ko","")
-                col_rank, col_zh, col_en, col_all = st.columns([2, 2, 2, 1])
+                col_rank, col_zh, col_en = st.columns([2, 3, 3])
                 with col_rank:
                     st.markdown(f"**{rank}순위**")
                     if ko: st.caption(ko)
                 with col_zh:
-                    if zh and st.button(zh, key=f"kw_zh_{rank}", use_container_width=True):
+                    if zh and st.button(f"{zh} ↗", key=f"kw_zh_{rank}", use_container_width=True):
                         write_log(name, "검색오픈", f"제품{num}/{rank}/{zh}")
                         st.session_state.open_js = open_js(zh)
                         st.rerun()
                 with col_en:
-                    if en and st.button(en, key=f"kw_en_{rank}", use_container_width=True):
+                    if en and st.button(f"{en} ↗", key=f"kw_en_{rank}", use_container_width=True):
                         write_log(name, "검색오픈", f"제품{num}/{rank}/{en}")
                         st.session_state.open_js = open_js(en)
                         st.rerun()
                     elif not en:
                         st.caption("(번역 필요)")
-                with col_all:
-                    if st.button("↗", key=f"kw_all_{rank}", use_container_width=True):
-                        urls = list(make_urls(zh).values()) if zh else []
-                        if en and en != zh: urls += list(make_urls(en).values())
-                        write_log(name, "검색오픈", f"제품{num}/{rank}/전체")
-                        st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
-                        st.rerun()
 
-            # 1~3순위 전체 열기 (중국어 / 영어 분리)
-            st.markdown('<div class="red-btn-wrap">', unsafe_allow_html=True)
-            ball, ball_en = st.columns(2)
-            with ball:
-                if st.button("🚀 1~3순위 중국어로 전체열기 (9개)", key="ms_all_zh", use_container_width=True):
-                    urls = [u for t in main_detail[:3] for u in make_urls(t.get("zh","")).values() if t.get("zh","")]
-                    write_log(name, "전체검색오픈", f"제품{num}/1~3순위/중국어")
-                    st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
-                    st.rerun()
-            with ball_en:
-                if st.button("🚀 1~3순위 영어로 전체열기 (9개)", key="ms_all_en", use_container_width=True):
-                    urls = [u for t in main_detail[:3] for u in make_urls(t.get("en","")).values() if t.get("en","")]
-                    write_log(name, "전체검색오픈", f"제품{num}/1~3순위/영어")
-                    st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
-                    st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
 
             # 4~5순위 + 추가키워드
             with st.expander("4~5순위 및 추가키워드"):

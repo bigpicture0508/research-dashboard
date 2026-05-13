@@ -655,7 +655,7 @@ if is_admin:
 # ══════════════════════════════════════════════════════════════
 # 직원
 # ══════════════════════════════════════════════════════════════
-st_autorefresh(interval=10000, key="staff_refresh")
+st_autorefresh(interval=60000, key="staff_refresh")
 
 try:
     data = read_all()
@@ -859,13 +859,28 @@ if my_item:
         else:
             st.progress(min(sc / TARGET_LINKS, 1.0), text=f"{sc} / {TARGET_LINKS}개")
 
-        with st.form(key=f"sf_{my_item['row']}", clear_on_submit=True):
-            link_inputs = []
-            for li in range(15):
-                lv = st.text_input(f"링크 {li+1}", placeholder="https://...", key=f"link_{li}",
-                                   label_visibility="collapsed" if li > 0 else "visible")
-                link_inputs.append(lv)
-            if st.form_submit_button("📤 한번에 제출", type="primary", use_container_width=True):
+        # 링크 임시저장 (새로고침/튕겨도 유지)
+        draft_key = f"draft_links_{my_item['row']}"
+        if draft_key not in st.session_state:
+            st.session_state[draft_key] = [""] * 15
+
+        link_inputs = []
+        for li in range(15):
+            slot_key = f"slot_{my_item['row']}_{li}"
+            val = st.text_input(
+                f"링크 {li+1}" if li == 0 else f"{li+1}",
+                value=st.session_state[draft_key][li],
+                placeholder="https://...",
+                key=slot_key,
+                label_visibility="visible" if li == 0 else "collapsed",
+            )
+            # 입력값 즉시 임시저장
+            st.session_state[draft_key][li] = val
+            link_inputs.append(val)
+
+        col_sub, col_clr = st.columns([3, 1])
+        with col_sub:
+            if st.button("📤 한번에 제출", key=f"submit_btn_{my_item['row']}", type="primary", use_container_width=True):
                 valid_links = [l.strip() for l in link_inputs if l.strip()]
                 if valid_links:
                     with st.spinner(f"{len(valid_links)}개 저장 중..."):
@@ -874,12 +889,18 @@ if my_item:
                             res = submit_link(my_item["row"], my_item["number"],
                                               my_item["title"], name, lnk)
                             write_log(name, "링크제출", f"제품{num}/{lnk[:50]}")
+                    # 제출 후 임시저장 초기화
+                    st.session_state[draft_key] = [""] * 15
                     if res and res["done"] and sc < TARGET_LINKS:
                         st.balloons()
                         st.success(f"🎉 {TARGET_LINKS}개 달성! 급여 대상 등록 완료.")
                     else:
                         st.success(f"{len(valid_links)}개 저장 완료 — 현재 {res['count']}개")
                     clear_cache(); st.rerun()
+        with col_clr:
+            if st.button("🗑 초기화", key=f"clear_btn_{my_item['row']}", use_container_width=True):
+                st.session_state[draft_key] = [""] * 15
+                st.rerun()
 
         with st.expander(f"제출 내역 ({sc}개)"):
             links = get_my_submissions(my_item["number"], name, hide_url=True)

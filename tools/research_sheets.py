@@ -24,6 +24,7 @@ SCOPES     = [
 TAB_RESEARCH        = "리서치"
 TAB_RESEARCH_RESULT = "리서치결과"
 TAB_ACCESS_LOG      = "접근로그"
+TAB_DRAFTS          = "임시저장"
 
 HEADERS = {
     TAB_RESEARCH: [
@@ -38,6 +39,10 @@ HEADERS = {
     TAB_ACCESS_LOG: [
         "일시", "직원이름", "행동", "상세",
     ],
+    TAB_DRAFTS: (
+        ["직원이름", "제품번호", "저장일시"] +
+        [f"링크{i}" for i in range(1, 16)]
+    ),
 }
 
 # 컬럼 인덱스 (0-based)
@@ -268,6 +273,56 @@ def finish(row_num: int) -> str:
     ws = sh.worksheet(TAB_RESEARCH)
     ws.update(range_name=f"N{row_num}:O{row_num}", values=[[now_str, ""]])
     return now_str
+
+
+def save_draft(assignee: str, product_number: str, links: list):
+    """링크 임시저장 (탭 닫아도 유지). 기존 같은 직원+제품 행은 덮어씀."""
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    ws = _ensure_tab(sh, TAB_DRAFTS)
+    rows = ws.get_all_values()
+    target_row = None
+    for i, r in enumerate(rows[1:], 2):
+        if len(r) >= 2 and r[0].strip() == assignee and r[1].strip() == str(product_number):
+            target_row = i
+            break
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    padded = (links + [""] * 15)[:15]
+    row_data = [assignee, str(product_number), now_str] + padded
+    if target_row:
+        ws.update(range_name=f"A{target_row}:R{target_row}", values=[row_data])
+    else:
+        ws.append_row(row_data)
+
+
+def load_draft(assignee: str, product_number: str) -> list:
+    """임시저장 링크 불러오기. 없으면 빈 리스트 15개."""
+    try:
+        gc = get_client()
+        sh = gc.open_by_key(SHEET_ID)
+        ws = _ensure_tab(sh, TAB_DRAFTS)
+        rows = ws.get_all_values()
+        for r in rows[1:]:
+            if len(r) >= 2 and r[0].strip() == assignee and r[1].strip() == str(product_number):
+                return (list(r[3:18]) + [""] * 15)[:15]
+    except Exception:
+        pass
+    return [""] * 15
+
+
+def clear_draft(assignee: str, product_number: str):
+    """제출 완료 후 임시저장 삭제."""
+    try:
+        gc = get_client()
+        sh = gc.open_by_key(SHEET_ID)
+        ws = _ensure_tab(sh, TAB_DRAFTS)
+        rows = ws.get_all_values()
+        for i, r in enumerate(rows[1:], 2):
+            if len(r) >= 2 and r[0].strip() == assignee and r[1].strip() == str(product_number):
+                ws.delete_rows(i)
+                return
+    except Exception:
+        pass
 
 
 def write_video_point(row_num: int, text: str):

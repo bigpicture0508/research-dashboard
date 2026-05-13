@@ -40,7 +40,7 @@ from research_sheets import (
     allow_revision, get_staff_worked_urls,
     get_my_submissions, get_payroll_summary, write_log,
     write_keywords, append_row, renumber_all, fill_numbers_and_titles,
-    write_video_point,
+    write_video_point, save_draft, load_draft, clear_draft,
 )
 
 @st.cache_data(ttl=30)
@@ -859,47 +859,62 @@ if my_item:
         else:
             st.progress(min(sc / TARGET_LINKS, 1.0), text=f"{sc} / {TARGET_LINKS}개")
 
-        # 링크 임시저장 (새로고침/튕겨도 유지)
-        draft_key = f"draft_links_{my_item['row']}"
-        if draft_key not in st.session_state:
-            st.session_state[draft_key] = [""] * 15
+        # 링크 임시저장 (탭 닫고 다시 열어도 복원)
+        draft_key    = f"draft_links_{my_item['row']}"
+        draft_loaded = f"draft_loaded_{my_item['row']}"
+
+        # 최초 진입 시 시트에서 임시저장 복원
+        if not st.session_state.get(draft_loaded):
+            saved = load_draft(name, my_item["number"])
+            st.session_state[draft_key]    = saved
+            st.session_state[draft_loaded] = True
 
         link_inputs = []
         for li in range(15):
             slot_key = f"slot_{my_item['row']}_{li}"
             val = st.text_input(
-                f"링크 {li+1}" if li == 0 else f"{li+1}",
+                "링크 입력 (1번)" if li == 0 else f"{li+1}",
                 value=st.session_state[draft_key][li],
                 placeholder="https://...",
                 key=slot_key,
                 label_visibility="visible" if li == 0 else "collapsed",
             )
-            # 입력값 즉시 임시저장
             st.session_state[draft_key][li] = val
             link_inputs.append(val)
 
-        col_sub, col_clr = st.columns([3, 1])
+        has_input = any(l.strip() for l in link_inputs)
+        col_sub, col_save, col_clr = st.columns([3, 2, 1])
         with col_sub:
-            if st.button("📤 한번에 제출", key=f"submit_btn_{my_item['row']}", type="primary", use_container_width=True):
+            if st.button("📤 한번에 제출", key=f"submit_btn_{my_item['row']}", type="primary",
+                         use_container_width=True, disabled=not has_input):
                 valid_links = [l.strip() for l in link_inputs if l.strip()]
-                if valid_links:
-                    with st.spinner(f"{len(valid_links)}개 저장 중..."):
-                        res = None
-                        for lnk in valid_links:
-                            res = submit_link(my_item["row"], my_item["number"],
-                                              my_item["title"], name, lnk)
-                            write_log(name, "링크제출", f"제품{num}/{lnk[:50]}")
-                    # 제출 후 임시저장 초기화
-                    st.session_state[draft_key] = [""] * 15
-                    if res and res["done"] and sc < TARGET_LINKS:
-                        st.balloons()
-                        st.success(f"🎉 {TARGET_LINKS}개 달성! 급여 대상 등록 완료.")
-                    else:
-                        st.success(f"{len(valid_links)}개 저장 완료 — 현재 {res['count']}개")
-                    clear_cache(); st.rerun()
+                with st.spinner(f"{len(valid_links)}개 저장 중..."):
+                    res = None
+                    for lnk in valid_links:
+                        res = submit_link(my_item["row"], my_item["number"],
+                                          my_item["title"], name, lnk)
+                        write_log(name, "링크제출", f"제품{num}/{lnk[:50]}")
+                # 제출 후 임시저장 삭제
+                clear_draft(name, my_item["number"])
+                st.session_state[draft_key]    = [""] * 15
+                st.session_state[draft_loaded] = False
+                if res and res["done"] and sc < TARGET_LINKS:
+                    st.balloons()
+                    st.success(f"🎉 {TARGET_LINKS}개 달성! 급여 대상 등록 완료.")
+                else:
+                    st.success(f"{len(valid_links)}개 저장 완료 — 현재 {res['count']}개")
+                clear_cache(); st.rerun()
+        with col_save:
+            if st.button("💾 임시저장", key=f"save_btn_{my_item['row']}", use_container_width=True,
+                         disabled=not has_input):
+                save_draft(name, my_item["number"], link_inputs)
+                st.toast("임시저장 완료 — 탭 닫아도 유지됩니다 ✅")
         with col_clr:
-            if st.button("🗑 초기화", key=f"clear_btn_{my_item['row']}", use_container_width=True):
-                st.session_state[draft_key] = [""] * 15
+            if st.button("🗑", key=f"clear_btn_{my_item['row']}", use_container_width=True,
+                         help="입력 초기화"):
+                clear_draft(name, my_item["number"])
+                st.session_state[draft_key]    = [""] * 15
+                st.session_state[draft_loaded] = False
                 st.rerun()
 
         with st.expander(f"제출 내역 ({sc}개)"):

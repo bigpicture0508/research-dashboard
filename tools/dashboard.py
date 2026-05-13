@@ -718,11 +718,19 @@ if my_item:
 
         # 직접 키워드 검색
         with st.expander("✏️ 직접 키워드 검색"):
-            custom_kw = st.text_input("검색어 직접 입력", placeholder="예: facial mist, 补水喷雾", key="custom_kw")
-            if st.button("🔍 직접 검색", key="custom_search", disabled=not custom_kw.strip()):
-                write_log(name, "직접검색", f"{custom_kw}")
-                st.session_state.open_js = open_js(custom_kw.strip())
-                st.rerun()
+            row_id = my_item["row"]
+            ck_key = f"custom_kw_{row_id}"
+            col_inp, col_btn = st.columns([4, 1])
+            with col_inp:
+                custom_kw = st.text_input("검색어", placeholder="예: facial mist, 补水喷雾",
+                                          key=ck_key, label_visibility="collapsed")
+            with col_btn:
+                if st.button("🔍 검색", key=f"custom_search_{row_id}", use_container_width=True):
+                    kw = st.session_state.get(ck_key, "").strip()
+                    if kw:
+                        write_log(name, "직접검색", kw)
+                        st.session_state.open_js = open_js(kw)
+                        st.rerun()
 
         st.divider()
 

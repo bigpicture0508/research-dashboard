@@ -411,8 +411,9 @@ if is_admin:
                         prog.progress((idx+1)/len(needs)); continue
                     prompt = (
                         "아래 중국어(간체) 검색키워드 목록을 영어와 한국어로 번역하세요.\n"
+                        "영어는 반드시 띄어쓰기 포함 (예: 'smoke exhaust fan' O, 'SmokeExhaustFan' X)\n"
                         "JSON 배열만 반환 (설명 없이):\n"
-                        '[{"zh":"원문","en":"English","ko":"한국어 뜻"},...]'
+                        '[{"zh":"원문","en":"english with spaces","ko":"한국어 뜻"},...]'
                         f"\n\n키워드: {json.dumps(all_kws, ensure_ascii=False)}"
                     )
                     try:
@@ -802,7 +803,8 @@ if my_item:
                                 model="claude-haiku-4-5-20251001", max_tokens=150,
                                 messages=[{"role":"user","content":
                                     f'"{kw}"를 틱톡/샤오홍슈/도우인 검색용으로 중국어(간체)와 영어로 번역.\n'
-                                    'JSON만 반환: {"zh":"중국어","en":"English"}'}])
+                                    '영어는 반드시 띄어쓰기 포함 (예: "smoke exhaust fan" O, "SmokeExhaustFan" X)\n'
+                                    'JSON만 반환: {"zh":"중국어","en":"english with spaces"}'}])
                             _raw = _msg.content[0].text.strip()
                             if "```" in _raw: _raw = _raw.split("```")[1].lstrip("json").strip()
                             _tr = json.loads(_raw)

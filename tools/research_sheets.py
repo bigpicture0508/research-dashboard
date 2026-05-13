@@ -27,7 +27,7 @@ TAB_ACCESS_LOG      = "접근로그"
 TAB_DRAFTS          = "임시저장"
 TAB_VIDEO_SOURCE    = "영상소스"
 
-MATERIAL_LINK_START = 3   # D열 (0-base), 재료링크 시작
+MATERIAL_LINK_START = 5   # F열 (0-base), 재료링크 시작 (D=직원확장포인트, E=확장포인트2)
 MATERIAL_LINK_COUNT = 50
 
 HEADERS = {
@@ -48,7 +48,7 @@ HEADERS = {
         [f"링크{i}" for i in range(1, 16)]
     ),
     TAB_VIDEO_SOURCE: (
-        ["썸네일", "유튜브링크", "제목"] +
+        ["썸네일", "유튜브링크", "제목", "직원_확장포인트", "확장포인트2"] +
         [f"재료링크{i}" for i in range(1, MATERIAL_LINK_COUNT + 1)]
     ),
 }
@@ -250,8 +250,10 @@ def unclaim(row_num: int):
     ws.update_cell(row_num, 11, "")
 
 
-def _add_to_video_source(sh, youtube_url: str, title: str, material_url: str):
-    """영상소스 탭에서 유튜브링크 행 찾아 빈 재료링크 슬롯에 추가. 없으면 새 행 생성."""
+def _add_to_video_source(sh, youtube_url: str, title: str, material_url: str, worker_ext_point: str = ""):
+    """영상소스 탭에서 유튜브링크 행 찾아 빈 재료링크 슬롯에 추가. 없으면 새 행 생성.
+    worker_ext_point: 직원이 입력한 확장포인트 → D열(직원_확장포인트)에 저장.
+    """
     import time as _t
     ws = _ensure_tab(sh, TAB_VIDEO_SOURCE)
     rows = ws.get_all_values()
@@ -265,15 +267,26 @@ def _add_to_video_source(sh, youtube_url: str, title: str, material_url: str):
             break
 
     if target_row is None:
-        # 새 행 추가 (썸네일 수식 포함)
+        # 새 행 추가 (썸네일 수식, 직원_확장포인트 포함)
         import re as _re
         vid_m = _re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", youtube_url)
         thumb = f'=IMAGE("https://img.youtube.com/vi/{vid_m.group(1)}/0.jpg")' if vid_m else ""
-        new_row = [thumb, youtube_url, title] + [material_url] + [""] * (MATERIAL_LINK_COUNT - 1)
+        # A=썸네일 B=유튜브링크 C=제목 D=직원_확장포인트 E=확장포인트2(빈값) F~=재료링크
+        new_row = [thumb, youtube_url, title, worker_ext_point, "", material_url] + [""] * (MATERIAL_LINK_COUNT - 1)
         ws.append_row(new_row, value_input_option="USER_ENTERED")
         return
 
-    # 빈 슬롯 탐색 (D열=index 3 부터)
+    # 직원_확장포인트 업데이트 (D열=index 3, 기존 값이 없을 때만)
+    existing_ext = row_data[3].strip() if len(row_data) > 3 else ""
+    if worker_ext_point and not existing_ext:
+        ws.update_cell(target_row, 4, worker_ext_point)
+        _t.sleep(0.1)
+    elif worker_ext_point and existing_ext:
+        # 기존 값에 줄바꿈으로 추가
+        ws.update_cell(target_row, 4, existing_ext + "\n" + worker_ext_point)
+        _t.sleep(0.1)
+
+    # 빈 재료링크 슬롯 탐색 (F열=index 5 부터)
     end = MATERIAL_LINK_START + MATERIAL_LINK_COUNT
     for col_idx in range(MATERIAL_LINK_START, end):
         val = row_data[col_idx].strip() if col_idx < len(row_data) else ""
@@ -284,7 +297,7 @@ def _add_to_video_source(sh, youtube_url: str, title: str, material_url: str):
 
 
 def submit_link(row_num: int, product_number: str, product_title: str,
-                assignee: str, link: str) -> dict:
+                assignee: str, link: str, worker_ext_point: str = "") -> dict:
     gc = get_client()
     sh = gc.open_by_key(SHEET_ID)
     ws_result = _ensure_tab(sh, TAB_RESEARCH_RESULT)
@@ -306,13 +319,13 @@ def submit_link(row_num: int, product_number: str, product_title: str,
         done_at = now_str
         ws.update_cell(row_num, 13, done_at)
 
-    # 영상소스 탭에 재료링크 자동 추가
+    # 영상소스 탭에 재료링크 + 직원_확장포인트 자동 추가
     try:
         youtube_url = ws.cell(row_num, 3).value or ""  # C열 = 유튜브링크
         if youtube_url:
-            _add_to_video_source(sh, youtube_url, product_title, link)
-    except Exception as _e:
-        pass  # 실패해도 제출 결과에 영향 없음
+            _add_to_video_source(sh, youtube_url, product_title, link, worker_ext_point)
+    except Exception:
+        pass
 
     return {"count": count, "done": count >= 10, "done_at": done_at}
 

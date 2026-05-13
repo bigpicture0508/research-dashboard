@@ -953,7 +953,8 @@ with tab_my:
                         res = None
                         for lnk in valid_links:
                             res = submit_link(my_item["row"], my_item["number"],
-                                              my_item["title"], name, lnk)
+                                              my_item["title"], name, lnk,
+                                              st.session_state.get(vp_key, ""))
                             write_log(name, "링크제출", f"제품{num}/{lnk[:50]}")
                     # 제출 후 임시저장 삭제
                     clear_draft(name, my_item["number"])

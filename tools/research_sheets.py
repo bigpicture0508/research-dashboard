@@ -50,9 +50,19 @@ HEADERS = {
 # J=처리상태 K=배정자 L=제출갯수 M=완료일시 N=마무리일시 O=수정허용 P=영상포인트
 
 
+_client_cache = {}
+
 def get_client():
-    creds = Credentials.from_service_account_file(str(CREDS_PATH), scopes=SCOPES)
-    return gspread.authorize(creds)
+    key = str(CREDS_PATH)
+    if key not in _client_cache:
+        creds = Credentials.from_service_account_file(str(CREDS_PATH), scopes=SCOPES)
+        _client_cache[key] = gspread.authorize(creds)
+    return _client_cache[key]
+
+
+def _get_ws(tab_name=TAB_RESEARCH):
+    """자주 쓰는 워크시트를 빠르게 반환."""
+    return get_client().open_by_key(SHEET_ID).worksheet(tab_name)
 
 
 def _ensure_tab(sh, tab_name):
@@ -102,9 +112,7 @@ def _parse_row(i, row):
 # ─── 읽기 ────────────────────────────────────────────────────
 
 def read_all():
-    gc = get_client()
-    sh = gc.open_by_key(SHEET_ID)
-    ws = _ensure_tab(sh, TAB_RESEARCH)
+    ws = _get_ws()
     rows = ws.get_all_values()
     return [_parse_row(i, list(r)) for i, r in enumerate(rows[1:], 2) if r and r[2].strip()]
 
@@ -178,9 +186,7 @@ def get_payroll_summary() -> list:
 
 def renumber_all():
     """A열 번호를 1부터 순서대로 재정렬"""
-    gc = get_client()
-    sh = gc.open_by_key(SHEET_ID)
-    ws = _ensure_tab(sh, TAB_RESEARCH)
+    ws = _get_ws()
     rows = ws.get_all_values()
     updates = []
     num = 1
@@ -194,9 +200,7 @@ def renumber_all():
 
 def fill_numbers_and_titles(rows_info: list):
     """번호/제목 없는 행에 자동으로 채움. rows_info: [(row_num, number, title), ...]"""
-    gc = get_client()
-    sh = gc.open_by_key(SHEET_ID)
-    ws = sh.worksheet(TAB_RESEARCH)
+    ws = _get_ws()
     updates = []
     for row_num, number, title in rows_info:
         updates.append({"range": f"A{row_num}:B{row_num}", "values": [[number, title]]})
@@ -205,38 +209,31 @@ def fill_numbers_and_titles(rows_info: list):
 
 
 def append_row(number: str, title: str, url: str) -> int:
-    gc = get_client()
-    sh = gc.open_by_key(SHEET_ID)
-    ws = _ensure_tab(sh, TAB_RESEARCH)
+    ws = _get_ws()
     ws.append_row([number, title, url] + [""] * 12)
     return len(ws.get_all_values())
 
 
 def write_keywords(row_num: int, keywords: list, extra: dict = None):
-    gc = get_client()
-    sh = gc.open_by_key(SHEET_ID)
-    ws = sh.worksheet(TAB_RESEARCH)
+    ws = _get_ws()
     kws = (keywords + [""] * 5)[:5]
     extra_str = json.dumps(extra or {}, ensure_ascii=False)
     ws.update(range_name=f"D{row_num}:J{row_num}", values=[kws + [extra_str, "완료"]])
 
 
 def claim(row_num: int, name: str) -> bool:
-    gc = get_client()
-    sh = gc.open_by_key(SHEET_ID)
-    ws = sh.worksheet(TAB_RESEARCH)
+    ws = _get_ws()
+    # 현재 배정자 확인 (1회 read)
     current = ws.cell(row_num, 11).value
     if current and current.strip():
         return False
+    # 배정 write (1회 write) — verify 생략으로 속도 향상
     ws.update_cell(row_num, 11, name)
-    verify = ws.cell(row_num, 11).value
-    return (verify or "").strip() == name.strip()
+    return True
 
 
 def unclaim(row_num: int):
-    gc = get_client()
-    sh = gc.open_by_key(SHEET_ID)
-    ws = sh.worksheet(TAB_RESEARCH)
+    ws = _get_ws()
     ws.update_cell(row_num, 11, "")
 
 
@@ -268,9 +265,7 @@ def submit_link(row_num: int, product_number: str, product_title: str,
 
 def finish(row_num: int) -> str:
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    gc = get_client()
-    sh = gc.open_by_key(SHEET_ID)
-    ws = sh.worksheet(TAB_RESEARCH)
+    ws = _get_ws()
     ws.update(range_name=f"N{row_num}:O{row_num}", values=[[now_str, ""]])
     return now_str
 
@@ -326,16 +321,12 @@ def clear_draft(assignee: str, product_number: str):
 
 
 def write_video_point(row_num: int, text: str):
-    gc = get_client()
-    sh = gc.open_by_key(SHEET_ID)
-    ws = sh.worksheet(TAB_RESEARCH)
+    ws = _get_ws()
     ws.update_cell(row_num, 16, text)
 
 
 def allow_revision(row_num: int):
-    gc = get_client()
-    sh = gc.open_by_key(SHEET_ID)
-    ws = sh.worksheet(TAB_RESEARCH)
+    ws = _get_ws()
     ws.update(range_name=f"N{row_num}:O{row_num}", values=[["", "Y"]])
 
 

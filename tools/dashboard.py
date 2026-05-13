@@ -694,6 +694,18 @@ try:
 except Exception:
     worked_urls = set()
 
+# ── 플랫폼 로그인 가이드 ──────────────────────────────────────
+with st.expander("🔑 처음 사용 시 — 플랫폼 로그인 (한 번만)", expanded=False):
+    st.markdown("아래 버튼으로 각 플랫폼에 로그인해두면 검색 시 자동으로 로그인 상태가 유지됩니다.")
+    st.caption("⚠️ 반드시 **크롬** 브라우저 사용 / 시크릿 모드 사용 금지")
+    la, lb, lc = st.columns(3)
+    with la:
+        st.link_button("🎵 TikTok 로그인", "https://www.tiktok.com/login", use_container_width=True)
+    with lb:
+        st.link_button("📕 샤오홍슈 로그인", "https://www.xiaohongshu.com/", use_container_width=True)
+    with lc:
+        st.link_button("🎬 도우인 로그인", "https://www.douyin.com/", use_container_width=True)
+
 # ── 탭 분리 ──────────────────────────────────────────────────
 tab_my, tab_select = st.tabs(["📌 내 작업", "📋 제품 선택"])
 

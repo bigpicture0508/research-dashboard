@@ -40,6 +40,7 @@ from research_sheets import (
     allow_revision, get_staff_worked_urls,
     get_my_submissions, get_payroll_summary, write_log,
     write_keywords, append_row, renumber_all, fill_numbers_and_titles,
+    write_video_point,
 )
 
 @st.cache_data(ttl=30)
@@ -519,18 +520,17 @@ if is_admin:
                                 if st.button(f"{rank}순위: {kw}", key=f"t_kw{rank}"):
                                     st.session_state.open_js = open_js(kw)
                                     st.rerun()
-                            extra = t_my_item.get("extra", {})
-                            if extra:
+                            t_extra = t_my_item.get("extra", {})
+                            t_extra_kws = [k for v in t_extra.values() for k in v if k]
+                            if t_extra_kws:
                                 st.markdown("---")
-                                for cat, cat_kws in extra.items():
-                                    if not cat_kws: continue
-                                    st.markdown(f"*{cat}*")
-                                    ecols = st.columns(min(len(cat_kws), 4))
-                                    for ei, kw in enumerate(cat_kws):
-                                        with ecols[ei % 4]:
-                                            if st.button(kw, key=f"t_ex_{cat}_{ei}", use_container_width=True):
-                                                st.session_state.open_js = open_js(kw)
-                                                st.rerun()
+                                st.markdown("**추가키워드** (제품 다른 표현)")
+                                tecols = st.columns(min(len(t_extra_kws), 4))
+                                for ei, kw in enumerate(t_extra_kws):
+                                    with tecols[ei % 4]:
+                                        if st.button(kw, key=f"t_ex_{ei}", use_container_width=True):
+                                            st.session_state.open_js = open_js(kw)
+                                            st.rerun()
                         st.divider()
                         sc = t_my_item["submit_count"]
                         st.markdown("**📎 링크 제출**")
@@ -666,19 +666,19 @@ if my_item:
                     st.markdown(" | ".join(f"[{n}]({u})" for n, u in make_urls(kw).items()))
 
             extra = my_item.get("extra", {})
-            if extra:
+            all_extra_kws = []
+            for cat_kws in extra.values():
+                all_extra_kws.extend([k for k in cat_kws if k])
+            if all_extra_kws:
                 st.markdown("---")
-                st.markdown("**관점별 추가 키워드** (AI가 대본을 분석해 분류)")
-                for cat, cat_kws in extra.items():
-                    if not cat_kws: continue
-                    st.markdown(f"*{cat}*")
-                    cols = st.columns(min(len(cat_kws), 4))
-                    for ci2, kw in enumerate(cat_kws):
-                        with cols[ci2 % 4]:
-                            if st.button(kw, key=f"ex_{cat}_{ci2}", use_container_width=True):
-                                write_log(name, "검색오픈", f"추가/{kw}")
-                                st.session_state.open_js = open_js(kw)
-                                st.rerun()
+                st.markdown("**추가키워드** (제품 다른 표현)")
+                ex_cols = st.columns(min(len(all_extra_kws), 4))
+                for ci2, kw in enumerate(all_extra_kws):
+                    with ex_cols[ci2 % 4]:
+                        if st.button(kw, key=f"ex_{ci2}", use_container_width=True):
+                            write_log(name, "검색오픈", f"추가/{kw}")
+                            st.session_state.open_js = open_js(kw)
+                            st.rerun()
 
         # 직접 키워드 검색
         with st.expander("✏️ 직접 키워드 검색"):
@@ -687,6 +687,25 @@ if my_item:
                 write_log(name, "직접검색", f"{custom_kw}")
                 st.session_state.open_js = open_js(custom_kw.strip())
                 st.rerun()
+
+        st.divider()
+
+        # 영상포인트 메모
+        st.markdown("**📝 영상포인트**")
+        vp_current = my_item.get("video_point", "")
+        vp_key = f"vp_{my_item['row']}"
+        if vp_key not in st.session_state:
+            st.session_state[vp_key] = vp_current
+        vp_text = st.text_area("영상 속 제품 특징 메모", value=st.session_state[vp_key],
+                               placeholder="예) 마스크팩 위에 덧바르는 수분 미스트, 냉장보관 강조, 30대 여성 타겟...",
+                               key=f"vp_area_{my_item['row']}", height=100,
+                               label_visibility="collapsed")
+        if st.button("💾 영상포인트 저장", key=f"vp_save_{my_item['row']}"):
+            write_video_point(my_item["row"], vp_text.strip())
+            st.session_state[vp_key] = vp_text.strip()
+            clear_cache()
+            write_log(name, "영상포인트저장", f"제품{my_item['number']}")
+            st.success("저장됐습니다.")
 
         st.divider()
 

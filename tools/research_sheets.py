@@ -30,7 +30,7 @@ HEADERS = {
         "번호", "제목", "유튜브링크",
         "키워드1", "키워드2", "키워드3", "키워드4", "키워드5",
         "추가키워드", "처리상태", "배정자",
-        "제출갯수", "완료일시", "마무리일시", "수정허용",
+        "제출갯수", "완료일시", "마무리일시", "수정허용", "영상포인트",
     ],
     TAB_RESEARCH_RESULT: [
         "제품번호", "제품명", "직원이름", "링크", "플랫폼", "제출일시",
@@ -42,7 +42,7 @@ HEADERS = {
 
 # 컬럼 인덱스 (0-based)
 # A=번호 B=제목 C=유튜브링크 D~H=키워드1~5 I=추가키워드
-# J=처리상태 K=배정자 L=제출갯수 M=완료일시 N=마무리일시 O=수정허용
+# J=처리상태 K=배정자 L=제출갯수 M=완료일시 N=마무리일시 O=수정허용 P=영상포인트
 
 
 def get_client():
@@ -70,7 +70,7 @@ def _detect_platform(url: str) -> str:
 
 
 def _parse_row(i, row):
-    while len(row) < 15:
+    while len(row) < 16:
         row.append("")
     try:
         extra = json.loads(row[8]) if row[8].strip() else {}
@@ -90,6 +90,7 @@ def _parse_row(i, row):
         "done_at":       row[12].strip(),
         "finished_at":   row[13].strip(),
         "revision_open": row[14].strip() == "Y",
+        "video_point":   row[15].strip(),
     }
 
 
@@ -267,6 +268,13 @@ def finish(row_num: int) -> str:
     ws = sh.worksheet(TAB_RESEARCH)
     ws.update(range_name=f"N{row_num}:O{row_num}", values=[[now_str, ""]])
     return now_str
+
+
+def write_video_point(row_num: int, text: str):
+    gc = get_client()
+    sh = gc.open_by_key(SHEET_ID)
+    ws = sh.worksheet(TAB_RESEARCH)
+    ws.update_cell(row_num, 16, text)
 
 
 def allow_revision(row_num: int):

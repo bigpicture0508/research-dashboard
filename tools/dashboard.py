@@ -474,7 +474,7 @@ if is_admin:
                 "번호": d["number"], "제목": d["title"],
                 "처리상태": d["status"], "배정자": d["assignee"] or "미배정",
                 "제출갯수": d["submit_count"], "마무리": "✅" if d["finished_at"] else "",
-            } for d in all_data]), use_container_width=True)
+            } for d in all_data]), width="stretch")
 
             st.markdown("---")
             st.subheader("배정 관리")
@@ -485,14 +485,14 @@ if is_admin:
                     st.markdown(f"**{item['number']}번** {item['title']} → *{item['assignee']}* ({item['submit_count']}개) {tag}")
                 with c2:
                     if item["finished_at"] and not item["revision_open"]:
-                        if st.button("✏️ 수정허용", key=f"rev_{item['row']}", use_container_width=True):
+                        if st.button("✏️ 수정허용", key=f"rev_{item['row']}", width="stretch"):
                             allow_revision(item["row"])
                             write_log("관리자", "수정허용", f"제품{item['number']} {item['assignee']}")
                             clear_cache(); st.rerun()
                     else:
-                        st.button("수정허용", key=f"rev_{item['row']}", disabled=True, use_container_width=True)
+                        st.button("수정허용", key=f"rev_{item['row']}", disabled=True, width="stretch")
                 with c3:
-                    if st.button("초기화", key=f"rst_{item['row']}", use_container_width=True):
+                    if st.button("초기화", key=f"rst_{item['row']}", width="stretch"):
                         unclaim(item["row"])
                         write_log("관리자", "배정초기화", f"제품{item['number']}")
                         clear_cache(); st.rerun()
@@ -514,12 +514,12 @@ if is_admin:
                 "submit_count":"제출갯수","done":"완료여부","done_at":"완료일시"})
             df["완료여부"] = df["완료여부"].map({True:"✅ 완료", False:"⏳ 진행중"})
             st.dataframe(df[["직원이름","제품번호","제품명","제출갯수","완료여부","완료일시"]],
-                         use_container_width=True)
+                         width="stretch")
             summary = (df[df["완료여부"]=="✅ 완료"].groupby("직원이름").size()
                        .reset_index(name="완료건수").sort_values("완료건수", ascending=False))
             if not summary.empty:
                 st.markdown("**직원별 완료 건수**")
-                st.dataframe(summary, use_container_width=True, hide_index=True)
+                st.dataframe(summary, width="stretch", hide_index=True)
 
             st.markdown("---")
             st.subheader("제출 링크 열람 (관리자 전용)")
@@ -549,7 +549,7 @@ if is_admin:
             if len(rows) > 1:
                 import pandas as pd
                 df_log = pd.DataFrame(rows[1:], columns=rows[0])
-                st.dataframe(df_log.iloc[::-1].head(300), use_container_width=True)
+                st.dataframe(df_log.iloc[::-1].head(300), width="stretch")
             else:
                 st.info("로그 없음")
         except Exception as e:
@@ -563,7 +563,7 @@ if is_admin:
         from tools.research_sheets import sync_to_channel_input, CHANNEL_SHEET_IDS
         channel_num = st.selectbox("채널 선택", list(CHANNEL_SHEET_IDS.keys()),
                                    format_func=lambda x: f"채널{x}")
-        if st.button("▶ 동기화 실행", type="primary", use_container_width=True):
+        if st.button("▶ 동기화 실행", type="primary", width="stretch"):
             with st.spinner("동기화 중..."):
                 try:
                     loaded = sync_to_channel_input(channel_num)
@@ -642,7 +642,7 @@ if is_admin:
                                 tecols = st.columns(min(len(t_extra_kws), 4))
                                 for ei, kw in enumerate(t_extra_kws):
                                     with tecols[ei % 4]:
-                                        if st.button(str(kw), key=f"t_ex_{ei}", use_container_width=True):
+                                        if st.button(str(kw), key=f"t_ex_{ei}", width="stretch"):
                                             st.session_state.open_js = open_js(kw)
                                             st.rerun()
                         st.divider()
@@ -654,7 +654,7 @@ if is_admin:
                             st.progress(min(sc / TARGET_LINKS, 1.0), text=f"{sc} / {TARGET_LINKS}개")
                         with st.form(key=f"t_sf_{t_my_item['row']}", clear_on_submit=True):
                             t_link = st.text_input("링크 붙여넣기", placeholder="https://...")
-                            if st.form_submit_button("제출", type="primary", use_container_width=True):
+                            if st.form_submit_button("제출", type="primary", width="stretch"):
                                 if t_link.strip():
                                     res = submit_link(t_my_item["row"], t_my_item["number"],
                                                       t_my_item["title"], tname, t_link.strip())
@@ -664,12 +664,12 @@ if is_admin:
                         tf1, tf2 = st.columns(2)
                         with tf1:
                             if st.button("🏁 마무리하기", key="t_fin", type="primary",
-                                         disabled=sc < TARGET_LINKS, use_container_width=True):
+                                         disabled=sc < TARGET_LINKS, width="stretch"):
                                 finish(t_my_item["row"])
                                 st.success("마무리 완료!")
                                 clear_cache(); st.rerun()
                         with tf2:
-                            if st.button("↩️ 반납하기", key="t_unc", use_container_width=True):
+                            if st.button("↩️ 반납하기", key="t_unc", width="stretch"):
                                 unclaim(t_my_item["row"])
                                 clear_cache(); st.rerun()
                 else:
@@ -681,7 +681,7 @@ if is_admin:
                                 ca, cb = st.columns([5, 2])
                                 with ca: st.markdown(f"**{item['number']}번** — {item['title'] or '(제목없음)'}")
                                 with cb:
-                                    if st.button("선택하기", key=f"t_cl_{item['row']}", type="primary", use_container_width=True):
+                                    if st.button("선택하기", key=f"t_cl_{item['row']}", type="primary", width="stretch"):
                                         ok = claim(item["row"], tname)
                                         if ok:
                                             clear_cache(); st.rerun()
@@ -725,9 +725,9 @@ with st.expander("🔑 처음 사용 시 — 플랫폼 로그인 (한 번만)", 
     st.caption("도우인·샤오홍슈는 탭을 열어둬야 로그인 상태가 유지됩니다.")
     la, lb = st.columns(2)
     with la:
-        st.link_button("🎵 TikTok 로그인", "https://www.tiktok.com/login", use_container_width=True)
+        st.link_button("🎵 TikTok 로그인", "https://www.tiktok.com/login", width="stretch")
     with lb:
-        if st.button("🇨🇳 샤오홍슈 + 도우인 로그인", use_container_width=True, key="cn_login"):
+        if st.button("🇨🇳 샤오홍슈 + 도우인 로그인", width="stretch", key="cn_login"):
             st.session_state.open_js = (
                 '<script>'
                 'window.open("https://www.xiaohongshu.com/","_blank");'
@@ -739,7 +739,7 @@ with st.expander("🔑 처음 사용 시 — 플랫폼 로그인 (한 번만)", 
     st.divider()
     st.markdown("**🎬 도우인 + 샤오홍슈 세션 유지**")
     st.caption("두 플랫폼 모두 탭을 열어둬야 로그인이 유지됩니다. 작업 시작할 때 아래 버튼을 누르고 그 탭들을 닫지 마세요.")
-    if st.button("📌 도우인 + 샤오홍슈 탭 열어두기 (작업 중 닫지 마세요)", key="cn_keep", use_container_width=True):
+    if st.button("📌 도우인 + 샤오홍슈 탭 열어두기 (작업 중 닫지 마세요)", key="cn_keep", width="stretch"):
         st.session_state.open_js = (
             '<script>'
             'window.open("https://www.douyin.com/","_blank");'
@@ -773,7 +773,7 @@ with tab_my:
                 # 원본 유튜브 보기
                 yt_url = my_item.get("url", "")
                 if yt_url:
-                    st.link_button("▶ 원본 유튜브 보기", yt_url, use_container_width=True)
+                    st.link_button("▶ 원본 유튜브 보기", yt_url, width="stretch")
 
             extra_json  = my_item.get("extra", {})
             main_detail, extra_list = _get_triplets(extra_json, kws)
@@ -790,12 +790,12 @@ with tab_my:
                     st.markdown(f"**{rank}순위**")
                     if ko: st.caption(ko)
                 with col_zh:
-                    if zh and st.button(f"{zh} ↗", key=f"kw_zh_{rank}", use_container_width=True):
+                    if zh and st.button(f"{zh} ↗", key=f"kw_zh_{rank}", width="stretch"):
                         write_log(name, "검색오픈", f"제품{num}/{rank}/{zh}")
                         st.session_state.open_js = open_js(zh)
                         st.rerun()
                 with col_en:
-                    if en and st.button(f"{en} ↗", key=f"kw_en_{rank}", use_container_width=True):
+                    if en and st.button(f"{en} ↗", key=f"kw_en_{rank}", width="stretch"):
                         write_log(name, "검색오픈", f"제품{num}/{rank}/{en}")
                         st.session_state.open_js = open_js(en)
                         st.rerun()
@@ -814,10 +814,10 @@ with tab_my:
                         st.markdown(f"**{rank}순위**")
                         if ko: st.caption(ko)
                     with c2:
-                        if zh and st.button(zh, key=f"kw45_zh_{rank}", use_container_width=True):
+                        if zh and st.button(zh, key=f"kw45_zh_{rank}", width="stretch"):
                             st.session_state.open_js = open_js(zh); st.rerun()
                     with c3:
-                        if en and st.button(en, key=f"kw45_en_{rank}", use_container_width=True):
+                        if en and st.button(en, key=f"kw45_en_{rank}", width="stretch"):
                             st.session_state.open_js = open_js(en); st.rerun()
 
                 if extra_list:
@@ -827,15 +827,15 @@ with tab_my:
                         zh, en = t.get("zh",""), t.get("en","")
                         ec1, ec2, ec3 = st.columns([2, 2, 1])
                         with ec1:
-                            if zh and st.button(zh, key=f"ex_zh_{ci2}", use_container_width=True):
+                            if zh and st.button(zh, key=f"ex_zh_{ci2}", width="stretch"):
                                 write_log(name, "검색오픈", f"추가/{zh}")
                                 st.session_state.open_js = open_js(zh); st.rerun()
                         with ec2:
-                            if en and st.button(en, key=f"ex_en_{ci2}", use_container_width=True):
+                            if en and st.button(en, key=f"ex_en_{ci2}", width="stretch"):
                                 write_log(name, "검색오픈", f"추가/{en}")
                                 st.session_state.open_js = open_js(en); st.rerun()
                         with ec3:
-                            if st.button("↗", key=f"ex_all_{ci2}", use_container_width=True):
+                            if st.button("↗", key=f"ex_all_{ci2}", width="stretch"):
                                 urls = list(make_urls(zh).values()) if zh else []
                                 if en and en != zh: urls += list(make_urls(en).values())
                                 write_log(name, "검색오픈", f"추가/{zh}/전체")
@@ -852,7 +852,7 @@ with tab_my:
                     st.text_input("한국어/중국어/영어로 입력", placeholder="예: 뜯는 페인트, rental room renovation...",
                                   key=ck_key, label_visibility="collapsed")
                 with col_btn:
-                    if st.button("🔍 번역+검색", key=f"custom_search_{row_id}", use_container_width=True):
+                    if st.button("🔍 번역+검색", key=f"custom_search_{row_id}", width="stretch"):
                         kw = st.session_state.get(ck_key, "").strip()
                         if kw:
                             import anthropic as _ant, os as _os
@@ -880,13 +880,13 @@ with tab_my:
                     st.markdown(f"**'{tr['orig']}'** 번역 결과")
                     tb1, tb2, tb3 = st.columns(3)
                     with tb1:
-                        if tr["zh"] and st.button(tr["zh"], key=f"tr_zh_{row_id}", use_container_width=True):
+                        if tr["zh"] and st.button(tr["zh"], key=f"tr_zh_{row_id}", width="stretch"):
                             st.session_state.open_js = open_js(tr["zh"]); st.rerun()
                     with tb2:
-                        if tr["en"] and st.button(tr["en"], key=f"tr_en_{row_id}", use_container_width=True):
+                        if tr["en"] and st.button(tr["en"], key=f"tr_en_{row_id}", width="stretch"):
                             st.session_state.open_js = open_js(tr["en"]); st.rerun()
                     with tb3:
-                        if st.button("↗ 둘 다 열기", key=f"tr_all_{row_id}", use_container_width=True):
+                        if st.button("↗ 둘 다 열기", key=f"tr_all_{row_id}", width="stretch"):
                             urls = list(make_urls(tr["zh"]).values()) + list(make_urls(tr["en"]).values())
                             st.session_state.open_js = "<script>" + "\n".join(f'window.open("{u}","_blank");' for u in urls) + "</script>"
                             st.rerun()
@@ -967,7 +967,7 @@ with tab_my:
             col_sub, col_save, col_clr = st.columns([3, 2, 1])
             with col_sub:
                 if st.button("📤 한번에 제출", key=f"submit_btn_{my_item['row']}", type="primary",
-                             use_container_width=True, disabled=not has_input):
+                             width="stretch", disabled=not has_input):
                     valid_links = [l.strip() for l in link_inputs if l.strip()]
                     with st.spinner(f"{len(valid_links)}개 저장 중..."):
                         res = None
@@ -987,7 +987,7 @@ with tab_my:
                         st.success(f"{len(valid_links)}개 저장 완료 — 현재 {res['count']}개")
                     clear_cache(); st.rerun()
             with col_save:
-                if st.button("💾 임시저장", key=f"save_btn_{my_item['row']}", use_container_width=True,
+                if st.button("💾 임시저장", key=f"save_btn_{my_item['row']}", width="stretch",
                              disabled=not has_input):
                     ep_val = st.session_state.get(f"ep_area_{my_item['row']}", "") or st.session_state.get(ep_key, "")
                     save_draft(name, my_item["number"], link_inputs,
@@ -995,7 +995,7 @@ with tab_my:
                     st.session_state[ep_key] = ep_val
                     st.toast("임시저장 완료 — 탭 닫아도 유지됩니다 ✅")
             with col_clr:
-                if st.button("🗑", key=f"clear_btn_{my_item['row']}", use_container_width=True,
+                if st.button("🗑", key=f"clear_btn_{my_item['row']}", width="stretch",
                              help="입력 초기화"):
                     clear_draft(name, my_item["number"])
                     st.session_state[draft_key]    = [""] * 15
@@ -1014,7 +1014,7 @@ with tab_my:
             cf, cr = st.columns([3, 2])
             with cf:
                 if st.button("🏁 작업 마무리하기", key="fin", type="primary",
-                             disabled=sc < TARGET_LINKS, use_container_width=True):
+                             disabled=sc < TARGET_LINKS, width="stretch"):
                     finished_at = finish(my_item["row"])
                     write_log(name, "마무리", f"제품{num}/{sc}개")
                     st.success(f"✅ 마무리 완료! ({finished_at})")
@@ -1022,7 +1022,7 @@ with tab_my:
                 if sc < TARGET_LINKS:
                     st.caption(f"{TARGET_LINKS - sc}개 더 제출하면 마무리 가능")
             with cr:
-                if st.button("↩️ 반납하기", key="unc", use_container_width=True):
+                if st.button("↩️ 반납하기", key="unc", width="stretch"):
                     write_log(name, "반납", f"제품{num}")
                     unclaim(my_item["row"])
                     clear_cache(); st.rerun()
@@ -1065,20 +1065,20 @@ with tab_select:
                 with c_btn:
                     if is_mine:
                         st.button("내가 작업중", key=f"busy_mine_{item['row']}", disabled=True,
-                                  use_container_width=True)
+                                  width="stretch")
                     elif already:
                         st.button("완료됨", key=f"done_{item['row']}", disabled=True,
-                                  use_container_width=True)
+                                  width="stretch")
                     elif assignee:
                         st.button("다른 분 작업중", key=f"taken_{item['row']}", disabled=True,
-                                  use_container_width=True)
+                                  width="stretch")
                     elif my_item:
                         st.button("내 작업 먼저 완료", key=f"busy_{item['row']}", disabled=True,
-                                  use_container_width=True,
+                                  width="stretch",
                                   help="작업 중인 제품을 마무리하거나 반납해야 새 제품을 선택할 수 있습니다.")
                     else:
                         if st.button("✅ 선택하기", key=f"cl_{item['row']}", type="primary",
-                                     use_container_width=True):
+                                     width="stretch"):
                             ok = claim(item["row"], name)
                             if ok:
                                 write_log(name, "제품선택", f"제품{n}")
